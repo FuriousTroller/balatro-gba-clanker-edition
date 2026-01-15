@@ -1,7 +1,9 @@
 #include "affine_background.h"
 #include "blind.h"
 #include "card.h"
+#include "font.h"
 #include "game.h"
+#include "gbalatro_sys8.h"
 #include "graphic_utils.h"
 #include "joker.h"
 #include "sprite.h"
@@ -31,8 +33,11 @@ void init()
         0,
         CLR_WHITE,
         TTE_BIT_UNPACK_OFFSET,
-        NULL,
-        NULL
+        &gbalatro_sys8Font,
+
+        // Explicitly use 8x8 tile text drawing function to improve performance
+        // See https://gbadev.net/tonc/tte.html#ssec-map-reg
+        se_drawg_w8h8
     );
     tte_erase_screen();
     tte_init_con();
