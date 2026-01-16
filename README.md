@@ -39,15 +39,15 @@ This **tech-demo/proof of concept** is strictly limited in content to a minimal 
 ### Controls: 
 (A: Pick Card/Make Selections)
 
-(B: Deselect All Cards) 
+(B: Deselect All Cards)
 
 (L: Sell Joker)
 
-(R: Sort Suit/Rank)
+(R: Toggle Sort Suit/Rank)
 
-(D-Pad: Navigation) 
+(D-Pad: Navigation)
 
-(Hold A: Swap Owned Jokers in the Shop)
+(Hold A: Swap Owned Jokers or Playing Cards in the Shop or Round)
 
 # Contributing
 
