@@ -2049,13 +2049,6 @@ static void game_playing_play_hand_on_pressed(void)
     selection_grid_move_selection_vert(&game_playing_selection_grid, -1);
 }
 
-static inline bool hand_can_play(void)
-{
-    if (hand_state != HAND_SELECT || hand_selections == 0)
-        return false;
-    return true;
-}
-
 static int game_playing_hand_row_get_size(void)
 {
     return hand_get_size();
