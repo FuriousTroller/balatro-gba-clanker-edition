@@ -2281,12 +2281,6 @@ static inline void game_playing_process_hand_select_input(void)
     selection_grid_process_input(&game_playing_selection_grid);
 }
 
-// TODO: Stray from merge    
-//     if (key_hit(SORT_HAND))
-//     {
-//         hand_toggle_sort();
-//     }
-
 static inline void card_draw(void)
 {
     if (deck_top < 0 || hand_top >= hand_size - 1 || hand_top >= MAX_HAND_SIZE - 1)
