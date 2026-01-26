@@ -2030,7 +2030,7 @@ static void game_playing_discard_on_pressed(void)
     selection_grid_move_selection_vert(&game_playing_selection_grid, -1);
 }
 
-void game_playing_execute_discard()
+static void game_playing_execute_discard(void)
 {
     if (!can_discard_hand())
         return;
@@ -2095,7 +2095,7 @@ static void game_playing_play_hand_on_pressed(void)
     selection_grid_move_selection_vert(&game_playing_selection_grid, -1);
 }
 
-void game_playing_execute_play_hand()
+static void game_playing_execute_play_hand(void)
 {
     if (!can_play_hand())
         return;
