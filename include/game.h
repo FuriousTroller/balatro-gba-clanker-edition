@@ -22,6 +22,10 @@
 #define PAUSE_GAME     KEY_START // Not implemented
 #define SELL_KEY       KEY_L
 
+// Matching the position of the on-screen buttons
+#define PLAY_HAND_KEY    KEY_L
+#define DISCARD_HAND_KEY KEY_R
+
 struct List;
 typedef struct List List;
 
