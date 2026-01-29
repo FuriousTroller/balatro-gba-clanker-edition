@@ -282,6 +282,32 @@ void main_bg_se_copy_expand_3x3_rect(Rect se_dest_rect, BG_POINT src_top_left_pn
     }
 }
 
+void main_bg_se_copy_expand_3w_row(Rect se_dest_rect, BG_POINT src_row_left_pnt)
+{
+    int dest_rect_width = rect_width(&se_dest_rect);
+    if (dest_rect_width < 2)
+    {
+        return;
+    }
+    
+    // Copy left and right sides
+    main_bg_se_3w_copy_expand_left_right_sides(
+        &se_dest_rect,
+        &src_row_left_pnt
+    );
+
+    if (dest_rect_width > 2)
+    {
+        SE middle_fill_se = se_mat[MAIN_BG_SBB][src_row_left_pnt.y][src_row_left_pnt.x + 1];
+        Rect dest_inner_fill_rect = se_dest_rect; 
+
+        // Avoid copying the sides when filling the rect.
+        dest_inner_fill_rect.left += 1;
+        dest_inner_fill_rect.right += 1;
+        main_bg_se_fill_rect_with_se(middle_fill_se, dest_inner_fill_rect);
+    }
+}
+
 void tte_erase_rect_wrapper(Rect rect)
 {
     tte_erase_rect(rect.left, rect.top, rect.right, rect.bottom);
