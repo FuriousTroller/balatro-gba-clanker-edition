@@ -256,7 +256,9 @@ static int calculate_interest_reward(void);
 static void game_over_anim_frame(void);
 
 static void game_playing_discard_on_pressed(void);
+static void game_playing_execute_discard(void);
 static void game_playing_play_hand_on_pressed(void);
+static void game_playing_execute_play_hand(void);
 static void game_playing_sort_by_rank_on_pressed(void);
 static void game_playing_sort_by_suit_on_pressed(void);
 
@@ -2022,19 +2024,20 @@ static void game_playing_discard_on_pressed(void)
     if (!can_discard_hand())
         return;
 
-    hand_state = HAND_DISCARD;
-    display_hands(--discards);
-    set_hand();
-    tte_printf(
-        "#{P:%d,%d; cx:0x%X000}%d",
-        DISCARDS_TEXT_RECT.left,
-        DISCARDS_TEXT_RECT.top,
-        TTE_RED_PB,
-        discards
-    );
+    game_playing_execute_discard();
 
     // Move back to hand selection
     selection_grid_move_selection_vert(&game_playing_selection_grid, -1);
+}
+
+static void game_playing_execute_discard(void)
+{
+    if (!can_discard_hand())
+        return;
+
+    hand_state = HAND_DISCARD;
+    display_discards(--discards);
+    set_hand();
 }
 
 static void game_playing_sort_by_rank_on_pressed(void)
@@ -2086,11 +2089,19 @@ static void game_playing_play_hand_on_pressed(void)
     if (!can_play_hand())
         return;
 
-    hand_state = HAND_PLAY;
-    display_hands(--hands);
+    game_playing_execute_play_hand();
 
     // Move back to hand selection
     selection_grid_move_selection_vert(&game_playing_selection_grid, -1);
+}
+
+static void game_playing_execute_play_hand(void)
+{
+    if (!can_play_hand())
+        return;
+
+    hand_state = HAND_PLAY;
+    display_hands(--hands);
 }
 
 static int game_playing_hand_row_get_size(void)
@@ -2216,9 +2227,13 @@ static void game_playing_hand_row_on_key_transit(
         hand_deselect_all_cards();
         set_hand();
     }
-    else if (key_hit(SORT_HAND))
+    else if (key_hit(PLAY_HAND_KEY))
     {
-        hand_toggle_sort();
+        game_playing_execute_play_hand();
+    }
+    else if (key_hit(DISCARD_HAND_KEY))
+    {
+        game_playing_execute_discard();
     }
 }
 
