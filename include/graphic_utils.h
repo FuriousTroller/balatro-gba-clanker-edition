@@ -259,11 +259,11 @@ void main_bg_se_copy_expand_3x3_rect(Rect se_rect_dest, BG_POINT se_rect_src_3x3
  * 1. The sides are stretched
  * 2. The center is filled.
  *
- * @param se_rect_dest destination for the copy, if rect width is 2, then the center is not
- * filled, and the center is not filled and only the sides are copied.
+ * @param se_rect_dest destination for the copy; if rect width is 2, the center is not
+ * filled and only the sides are copied.
  * **But dest rect width must be at least 2.**
  *
- * @param se_rect_src_3x3_top_left points to the top left corner of the source 3x3 rect.
+ * @param src_row_left_pnt points to the leftmost tile of the source 3-width rect.
  */
 void main_bg_se_copy_expand_3w_row(Rect se_dest_rect, BG_POINT src_row_left_pnt);
 
