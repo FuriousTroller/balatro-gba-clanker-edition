@@ -242,9 +242,9 @@ void main_bg_se_copy_rect(Rect se_rect, BG_POINT dest_pos);
  * 3. The sides are stretched
  * 4. The center is filled.
  *
- * @param se_rect_dest  destination for the 3x3 copy, if rect sides are length 2, then the sides are 
- * not copied, and the center is not filled (in the case of both top and bottom sides), 
- * and only the corners are copied. 
+ * @param se_rect_dest  destination for the 3x3 copy, if rect sides are length 2, then the sides are
+ * not copied, and the center is not filled (in the case of both top and bottom sides),
+ * and only the corners are copied.
  * **But dest rect sides must be at least 2.**
  *
  * @param se_rect_src_3x3_top_left points to the top left corner of the source 3x3 rect.
@@ -260,7 +260,7 @@ void main_bg_se_copy_expand_3x3_rect(Rect se_rect_dest, BG_POINT se_rect_src_3x3
  * 2. The center is filled.
  *
  * @param se_rect_dest destination for the copy, if rect width is 2, then the center is not
- * filled, and the center is not filled and only the sides are copied. 
+ * filled, and the center is not filled and only the sides are copied.
  * **But dest rect width must be at least 2.**
  *
  * @param se_rect_src_3x3_top_left points to the top left corner of the source 3x3 rect.
