@@ -122,16 +122,15 @@ static void profile_timer_stop(void)
 
     volatile s32 frame_diff = frame_time - prev_frame_time;
     (void)frame_diff;
-    
+
     // feel free to turn on, turns the game very slow
-    //tte_printf("#{P:0,0 ;x:0x2000} FRAME_TIME:       %ld", frame_time);
-    //tte_printf("#{P:0,8 ;x:0x2000} FRAME_TIME_PREV:  %ld", prev_frame_time);
-    //tte_printf("#{P:0,16;x:0x2000} FRAME_DIFF:      %ld", frame_diff);
+    // tte_printf("#{P:0,0 ;x:0x2000} FRAME_TIME:       %ld", frame_time);
+    // tte_printf("#{P:0,8 ;x:0x2000} FRAME_TIME_PREV:  %ld", prev_frame_time);
+    // tte_printf("#{P:0,16;x:0x2000} FRAME_DIFF:      %ld", frame_diff);
 
     profile_timer_breakpoint();
 
     prev_frame_time = frame_time;
-
 }
 #endif
 
