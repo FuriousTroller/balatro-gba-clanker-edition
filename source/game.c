@@ -1,5 +1,5 @@
 #include "game.h"
-
+#include "ai_player.h"
 #include "affine_background.h"
 #include "affine_background_gfx.h"
 #include "audio_utils.h"
@@ -25,7 +25,7 @@
 #include <maxmod.h>
 #include <stdint.h>
 #include <stdlib.h>
-
+#include <limits.h>
 #define STRAIGHT_AND_FLUSH_SIZE_FOUR_FINGERS 4
 #define STRAIGHT_AND_FLUSH_SIZE_DEFAULT      5
 
@@ -39,8 +39,12 @@
 #define ROUND_END_BLACK_PANEL_INIT_BOTTOM_SE 12
 
 #define MAIN_MENU_BUTTONS             2
-#define MAIN_MENU_IMPLEMENTED_BUTTONS 1 // Remove this once all buttons are implemented
+#define MAIN_MENU_IMPLEMENTED_BUTTONS 2 
 #define MAIN_MENU_PLAY_BTN_IDX        0
+#define MAIN_MENU_AI_BTN_IDX          1
+
+// AI vs. Player mod constants
+#define AI_THINK_DELAY_FRAMES 40
 
 // TODO: Properly define and use
 #define MENU_POP_OUT_ANIM_FRAMES 20
@@ -91,6 +95,7 @@
 // Palette IDs
 #define BOSS_BLIND_PRIMARY_PID               1
 #define MAIN_MENU_PLAY_BUTTON_OUTLINE_PID    2
+#define MAIN_MENU_AI_BUTTON_OUTLINE_PID      3
 #define REROLL_BTN_PID                       3
 #define BLIND_SKIP_BTN_PID                   5
 #define MAIN_MENU_PLAY_BUTTON_MAIN_COLOR_PID 5
@@ -215,6 +220,9 @@ static void game_lose_on_update(void);
 static void game_over_on_exit(void);
 static void game_win_on_init(void);
 static void game_win_on_update(void);
+static void game_score_compare_on_init(void);
+static void game_score_compare_on_update(void);
+static void game_score_compare_on_exit(void);
 static void game_shop_intro(void);
 static void game_shop_process_user_input(void);
 static void game_shop_outro(void);
@@ -262,6 +270,10 @@ static void game_playing_play_hand_on_pressed(void);
 static void game_playing_execute_play_hand(void);
 static void game_playing_sort_by_rank_on_pressed(void);
 static void game_playing_sort_by_suit_on_pressed(void);
+// AI-vs-player mod helpers
+static void game_ai_turn_start(void);
+static void game_ai_turn_end(void);
+static void ai_auto_play(void);
 
 static int game_playing_button_row_get_size(void);
 static bool game_playing_button_row_on_selection_changed(
@@ -601,7 +613,15 @@ static u32 temp_score = 0; // This is the score that shows in the same spot as t
 static bool score_flames_active = false;
 static FIXED lerped_score = 0;
 static FIXED lerped_temp_score = 0;
-
+// AI vs. Player mod state
+static bool ai_mode_enabled = false;
+static bool ai_is_playing = false;
+static u32 player_round_score = 0;
+static u32 ai_round_score = 0;
+static Card   _ai_cards[MAX_DECK_SIZE];
+static bool   _ai_cards_initialized = false;
+static Card* _player_deck_save[MAX_DECK_SIZE];
+static int    _player_deck_save_top = -1;
 static u32 chips = 0;
 static u32 mult = 0;
 static bool retrigger = false;
@@ -2385,8 +2405,303 @@ static inline void card_draw(void)
     );
 }
 
+/* -------------------------------------------------------------------------
+ * game_ai_turn_start
+ *
+ * Called from game_playing_handle_round_over() after the player exhausts
+ * their hands.  Saves the player's deck, loads a freshly-shuffled AI deck,
+ * and resets all play-state variables so that GAME_STATE_PLAYING continues
+ * with the AI as the active player.
+ * ------------------------------------------------------------------------- */
+static void game_ai_turn_start(void)
+{
+    ai_is_playing = true;
+
+    // ------------------------------------------------------------------
+    // 1. Save the player's deck (all 52 cards are back in deck[] at this
+    //    point because HAND_SHUFFLING flushed everything before this call).
+    // ------------------------------------------------------------------
+    _player_deck_save_top = deck_top;
+    for (int i = 0; i <= deck_top; i++)
+        _player_deck_save[i] = deck[i];
+
+    // ------------------------------------------------------------------
+    // 2. Build the AI deck from statically-allocated Card storage.
+    //    We cannot use card_new() because the Card pool is full (all 52
+    //    slots are occupied by the player's cards which remain live for
+    //    the next round).
+    // ------------------------------------------------------------------
+    if (!_ai_cards_initialized)
+    {
+        for (int s = 0; s < NUM_SUITS; s++)
+        {
+            for (int r = 0; r < NUM_RANKS; r++)
+            {
+                int idx           = s * NUM_RANKS + r;
+                _ai_cards[idx].suit = (u8)s;
+                _ai_cards[idx].rank = (u8)r;
+            }
+        }
+        _ai_cards_initialized = true;
+    }
+
+    deck_top = -1;
+    for (int i = 0; i < MAX_DECK_SIZE; i++)
+        deck[++deck_top] = &_ai_cards[i];
+
+    deck_shuffle(); // Randomise the AI deck
+
+    // ------------------------------------------------------------------
+    // 3. Reset play-state variables for a fresh round.
+    // ------------------------------------------------------------------
+    score               = STARTING_SCORE;
+    temp_score          = 0;
+    lerped_score        = 0;
+    lerped_temp_score   = 0;
+    score_flames_active = false;
+    hands               = max_hands;
+    discards            = max_discards;
+    hand_state          = HAND_DRAW;
+    play_state          = PLAY_STARTING;
+    hand_selections     = 0;
+    cards_drawn         = 0;
+    scored_card_index   = 0;
+    played_top          = -1;
+    sound_played        = false;
+    discarded_card      = false;
+    timer               = TM_ZERO;
+
+    _joker_scored_itr          = list_itr_create(&_owned_jokers_list);
+    _joker_card_scored_end_itr = list_itr_create(&_owned_jokers_list);
+    _joker_round_end_itr       = list_itr_create(&_owned_jokers_list);
+
+    // Reset the selection grid back to the initial position
+    game_playing_selection_grid.selection = GAME_PLAYING_INIT_SEL;
+
+    // ------------------------------------------------------------------
+    // 4. Restore the playing background (HAND_SHUFFLING had switched it
+    //    to BG_ROUND_END).  Setting background to BG_NONE forces the
+    //    full tile / palette reload inside change_background().
+    // ------------------------------------------------------------------
+    background = BG_NONE;
+    change_background(BG_CARD_SELECTING);
+
+    // ------------------------------------------------------------------
+    // 5. Refresh the HUD.
+    // ------------------------------------------------------------------
+    display_score(score);
+    display_hands(hands);
+    display_discards(discards);
+    display_chips();
+    display_mult();
+
+    // Re-draw the blind requirement (wiped by the background reload).
+    Rect blind_req_rect = BLIND_REQ_TEXT_RECT;
+    u32  blind_req      = blind_get_requirement(current_blind, ante);
+    char blind_req_buf[UINT_MAX_DIGITS + 1];
+    truncate_uint_to_suffixed_str(
+        blind_req,
+        rect_width(&BLIND_REQ_TEXT_RECT) / TTE_CHAR_SIZE,
+        blind_req_buf
+    );
+    update_text_rect_to_right_align_str(&blind_req_rect, blind_req_buf, OVERFLOW_RIGHT);
+    tte_printf(
+        "#{P:%d,%d; cx:0x%X000}%s",
+        blind_req_rect.left,
+        blind_req_rect.top,
+        TTE_RED_PB,
+        blind_req_buf
+    );
+
+    tte_printf(
+        "#{P:%d,%d; cx:0x%X000}$%d",
+        BLIND_REWARD_RECT.left,
+        BLIND_REWARD_RECT.top,
+        TTE_YELLOW_PB,
+        blind_get_reward(current_blind)
+    );
+
+    // ------------------------------------------------------------------
+    // 6. Show a prominent "AI TURN" label where the hand type normally
+    //    appears so the player knows the opponent is now playing.
+    // ------------------------------------------------------------------
+    tte_erase_rect_wrapper(HAND_TYPE_RECT);
+    tte_printf(
+        "#{P:%d,%d; cx:0x%X000}AI TURN",
+        HAND_TYPE_RECT.left,
+        HAND_TYPE_RECT.top,
+        TTE_RED_PB
+    );
+}
+
+/* -------------------------------------------------------------------------
+ * game_ai_turn_end
+ *
+ * Called from game_playing_handle_round_over() after the AI exhausts its
+ * hands.  Restores the player's deck so that subsequent rounds operate on
+ * the player's own cards again.
+ * ------------------------------------------------------------------------- */
+static void game_ai_turn_end(void)
+{
+    // Clean up any cards still on screen (should be none after HAND_SHUFFLING
+    // completes, but guard just in case).
+    for (int i = 0; i <= hand_top; i++)
+    {
+        if (hand[i])
+            card_object_destroy(&hand[i]);
+    }
+    hand_top = -1;
+
+    for (int i = 0; i <= played_top; i++)
+    {
+        if (played[i])
+            card_object_destroy(&played[i]);
+    }
+    played_top = -1;
+
+    // Restore the player's deck pointers.
+    deck_top = -1;
+    for (int i = 0; i <= _player_deck_save_top; i++)
+        deck[++deck_top] = _player_deck_save[i];
+
+    // Discard pile should already be empty (HAND_SHUFFLING flushed it),
+    // but clear it for safety.
+    discard_top = -1;
+}
+
+/* -------------------------------------------------------------------------
+ * ai_auto_play
+ *
+ * Called from game_playing_process_input_and_state() when it is the AI's
+ * turn and hand_state == HAND_SELECT.
+ *
+ * Asks ai_select_best_hand() for the optimal card combination, selects
+ * those cards in the game engine (so the existing rendering / scoring
+ * pipeline handles the rest), then calls game_playing_execute_play_hand().
+ * ------------------------------------------------------------------------- */
+static void ai_auto_play(void)
+{
+    if (hand_top < 0)
+        return; // Nothing in hand yet
+
+    // Build a compact array of the current hand's Card* pointers.
+    // hand[] may have NULL gaps if cards were discarded, so we compress.
+    Card* ai_hand_cards[MAX_HAND_SIZE];
+    int   card_idx_map[MAX_HAND_SIZE]; // maps compact idx → hand[] index
+    int   ai_hand_size = 0;
+
+    for (int i = 0; i <= hand_top; i++)
+    {
+        if (hand[i] != NULL)
+        {
+            ai_hand_cards[ai_hand_size] = hand[i]->card;
+            card_idx_map[ai_hand_size]  = i;
+            ai_hand_size++;
+        }
+    }
+
+    if (ai_hand_size == 0)
+        return;
+
+    // Ask the AI brain for the best selection.
+    bool sel[MAX_HAND_SIZE] = {false};
+    int best_count = ai_select_best_hand(ai_hand_cards, ai_hand_size, sel);
+
+    // If AI has discard tokens remaining and there are leftover cards not
+    // chosen for play, throw away the weakest one first.
+    int leftover = ai_hand_size - best_count;
+    if (discards > 0 && leftover > 0)
+    {
+        // pick the lowest-value leftover card
+        int worst_hi = -1;
+        int worst_val = INT_MAX;
+        for (int ci = 0; ci < ai_hand_size; ci++)
+        {
+            if (!sel[ci])
+            {
+                int hi = card_idx_map[ci];
+                int v = card_get_value(hand[hi]->card);
+                if (v < worst_val)
+                {
+                    worst_val = v;
+                    worst_hi = hi;
+                }
+            }
+        }
+        if (worst_hi >= 0)
+        {
+            // deselect everything, then select only the chosen discard
+            for (int i = 0; i <= hand_top; i++)
+            {
+                if (hand[i] && card_object_is_selected(hand[i]))
+                {
+                    card_object_set_selected(hand[i], false);
+                }
+            }
+            hand_selections = 0;
+
+            card_object_set_selected(hand[worst_hi], true);
+            hand_selections = 1;
+            set_hand();
+
+            game_playing_execute_discard();
+            timer = TM_ZERO;
+            return; // let the discard animation/process happen
+        }
+    }
+
+    // Deselect everything first, then apply the new selection.
+    for (int i = 0; i <= hand_top; i++)
+    {
+        if (hand[i] && card_object_is_selected(hand[i]))
+        {
+            card_object_set_selected(hand[i], false);
+            hand_selections--;
+        }
+    }
+
+    for (int ci = 0; ci < ai_hand_size; ci++)
+    {
+        if (sel[ci])
+        {
+            int hi = card_idx_map[ci];
+            card_object_set_selected(hand[hi], true);
+            hand_selections++;
+        }
+    }
+
+    set_hand(); // Update the chips/mult/hand-type display
+
+    // The player's owned jokers remain in _owned_jokers_list during the AI
+    // turn, so the normal PLAY_SCORING_* pipeline applies every joker effect
+    // to the AI exactly the same way it does for the player.
+
+    // Play the selected cards.
+    if (can_play_hand())
+        game_playing_execute_play_hand();
+
+    timer = TM_ZERO; // Reset so the next think-delay starts fresh
+}
+
 static inline void game_playing_handle_round_over(void)
 {
+    if (ai_mode_enabled)
+    {
+        if (!ai_is_playing)
+        {
+            // Player's half is over, let AI play
+            player_round_score = score;
+            game_ai_turn_start();
+            return; 
+        }
+
+        // AI's half is over
+        ai_round_score = score;
+        ai_is_playing  = false;
+        game_ai_turn_end(); 
+        game_change_state(GAME_STATE_SCORE_COMPARE);
+        return;
+    }
     enum GameState next_state = GAME_STATE_ROUND_END;
 
     if (score >= blind_get_requirement(current_blind, ante))
@@ -2779,6 +3094,10 @@ static bool check_and_score_joker_for_event(
 
 static inline bool game_round_is_over(void)
 {
+    if (ai_mode_enabled)
+    {
+        return hands == 0;
+    }
     return hands == 0 || score >= blind_get_requirement(current_blind, ante);
 }
 
@@ -3208,9 +3527,19 @@ static inline int hand_get_max_size(void)
 
 static inline void game_playing_process_input_and_state(void)
 {
-    if (hand_state == HAND_SELECT)
+if (hand_state == HAND_SELECT)
     {
-        game_playing_process_hand_select_input();
+        if (ai_is_playing)
+        {
+            if (timer >= FRAMES(AI_THINK_DELAY_FRAMES))
+            {
+                ai_auto_play();
+            }
+        }
+        else
+        {
+            game_playing_process_hand_select_input();
+        }
     }
     else if (play_state == PLAY_ENDING)
     {
@@ -5002,11 +5331,12 @@ static void game_main_menu_on_update()
         rng_seed *= 2;
     }
 
-    if (key_hit(KEY_LEFT))
+if (key_hit(KEY_LEFT))
     {
         if (selection_x > 0)
         {
             selection_x--;
+            play_sfx(SFX_CARD_FOCUS, MM_BASE_PITCH_RATE, SFX_DEFAULT_VOLUME);
         }
     }
     else if (key_hit(KEY_RIGHT))
@@ -5014,28 +5344,44 @@ static void game_main_menu_on_update()
         if (selection_x < MAIN_MENU_IMPLEMENTED_BUTTONS - 1)
         {
             selection_x++;
+            play_sfx(SFX_CARD_FOCUS, MM_BASE_PITCH_RATE, SFX_DEFAULT_VOLUME);
         }
     }
 
+    // Highlight the currently focused button; un-highlight the other.
     if (selection_x == MAIN_MENU_PLAY_BTN_IDX)
     {
         memset16(&pal_bg_mem[MAIN_MENU_PLAY_BUTTON_OUTLINE_PID], BTN_HIGHLIGHT_COLOR, 1);
+        memcpy16(
+            &pal_bg_mem[MAIN_MENU_AI_BUTTON_OUTLINE_PID],
+            &pal_bg_mem[MAIN_MENU_PLAY_BUTTON_MAIN_COLOR_PID],
+            1
+        );
 
         if (key_hit(SELECT_CARD))
         {
             play_sfx(SFX_BUTTON, MM_BASE_PITCH_RATE, BUTTON_SFX_VOLUME);
+            ai_mode_enabled = false;
             game_start();
         }
     }
-    else
+    else // MAIN_MENU_AI_BTN_IDX
     {
+        memset16(&pal_bg_mem[MAIN_MENU_AI_BUTTON_OUTLINE_PID], BTN_HIGHLIGHT_COLOR, 1);
         memcpy16(
             &pal_bg_mem[MAIN_MENU_PLAY_BUTTON_OUTLINE_PID],
             &pal_bg_mem[MAIN_MENU_PLAY_BUTTON_MAIN_COLOR_PID],
             1
         );
+
+        if (key_hit(SELECT_CARD))
+        {
+            play_sfx(SFX_BUTTON, MM_BASE_PITCH_RATE, BUTTON_SFX_VOLUME);
+            ai_mode_enabled = true;
+            game_start();
+        }
+        }
     }
-}
 
 static void game_over_anim_frame(void)
 {
@@ -5075,6 +5421,7 @@ static void game_lose_on_update()
 // util we decide what we want to do after a game over.
 static void game_over_on_exit()
 {
+    ai_is_playing = false; // Reset AI state
     while (list_get_len(&_owned_jokers_list) > 0)
     {
         JokerObject* joker_object = list_get_at_idx(&_owned_jokers_list, 0);
@@ -5119,6 +5466,110 @@ static void game_over_on_exit()
     );
 
     affine_background_load_palette(affine_background_gfxPal);
+}
+
+/* =========================================================================
+ * GAME_STATE_SCORE_COMPARE — Show player vs. AI score and decide the outcome
+ * =========================================================================
+ *
+ * Pixel positions for the comparison overlay.  These sit inside the dark
+ * round-end panel that BG_ROUND_END renders above the card area.
+ */
+#define COMPARE_TEXT_X     88
+#define COMPARE_PSCORE_Y   72
+#define COMPARE_AISCORE_Y  84
+#define COMPARE_RESULT_Y  100
+#define COMPARE_PROMPT_Y  120
+
+static void game_score_compare_on_init(void)
+{
+    // Background is already BG_ROUND_END (set by HAND_SHUFFLING before the
+    // state transition).  Expand the popup panel instantly so there is a
+    // readable dark background for the text.
+    for (int i = 0; i < TM_END_POP_MENU_ANIM; i++)
+    {
+        main_bg_se_copy_rect_1_tile_vert(POP_MENU_ANIM_RECT, SCREEN_UP);
+    }
+
+    // ------ Player score -----------------------------------------------
+    char player_buf[UINT_MAX_DIGITS + 8];
+    snprintf(player_buf, sizeof(player_buf), "YOU:%lu", player_round_score);
+    tte_printf(
+        "#{P:%d,%d; cx:0x%X000}%s",
+        COMPARE_TEXT_X, COMPARE_PSCORE_Y,
+        TTE_WHITE_PB, player_buf
+    );
+
+    // ------ AI score ---------------------------------------------------
+    char ai_buf[UINT_MAX_DIGITS + 8];
+    snprintf(ai_buf, sizeof(ai_buf), " AI:%lu", ai_round_score);
+    tte_printf(
+        "#{P:%d,%d; cx:0x%X000}%s",
+        COMPARE_TEXT_X, COMPARE_AISCORE_Y,
+        TTE_WHITE_PB, ai_buf
+    );
+
+    // ------ Result message ---------------------------------------------
+    if (player_round_score > ai_round_score)
+    {
+        tte_printf(
+            "#{P:%d,%d; cx:0x%X000}YOU WIN!",
+            COMPARE_TEXT_X, COMPARE_RESULT_Y,
+            TTE_BLUE_PB
+        );
+    }
+    else
+    {
+        tte_printf(
+            "#{P:%d,%d; cx:0x%X000}DEFEAT",
+            COMPARE_TEXT_X, COMPARE_RESULT_Y,
+            TTE_RED_PB
+        );
+    }
+
+    tte_printf(
+        "#{P:%d,%d; cx:0xF000}A:NEXT",
+        COMPARE_TEXT_X, COMPARE_PROMPT_Y
+    );
+}
+
+static void game_score_compare_on_exit(void)
+{
+    tte_erase_screen();
+}
+
+static void game_score_compare_on_update(void)
+{
+    // Advance only when the player presses A.
+    if (!key_hit(SELECT_CARD))
+        return;
+
+    if (player_round_score > ai_round_score)
+    {
+        // Player beats the AI — treat this as beating the blind normally.
+        // Restore the player's score so the round-end display is meaningful.
+        score = player_round_score;
+
+        enum GameState next_state = GAME_STATE_ROUND_END;
+        if (current_blind == BLIND_TYPE_BOSS)
+        {
+            if (ante < MAX_ANTE)
+            {
+                display_ante(++ante);
+            }
+            else
+            {
+                next_state = GAME_STATE_WIN;
+            }
+        }
+        game_change_state(next_state);
+    }
+    else
+    {
+        // AI wins — the player loses the run.
+        score = player_round_score; // Show player score in the game-over screen
+        game_change_state(GAME_STATE_LOSE);
+    }
 }
 
 static void game_win_on_update()
