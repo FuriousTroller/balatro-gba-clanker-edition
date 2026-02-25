@@ -367,6 +367,18 @@ static u32 square_joker_effect(
     enum JokerEvent joker_event, 
     JokerEffect** joker_effect
 );
+static u32 smeared_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+);
+static u32 flash_card_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+);
 
 // clang-format off
 /* The index of a joker in the registry matches its ID.
@@ -438,7 +450,9 @@ const JokerInfo joker_registry[] =
     { COMMON_JOKER,    5, supernova_joker_effect            }, // 55
     { COMMON_JOKER,    4, green_joker_effect                }, // 56
     { COMMON_JOKER,    4, square_joker_effect               }, // 57
-    
+    { UNCOMMON_JOKER,  5, smeared_joker_effect              }, // 58
+    { UNCOMMON_JOKER,  4, flash_card_joker_effect           }, // 59
+
     // The following jokers don't have sprites yet,
     // uncomment them when their sprites are added.
 #if 0
@@ -500,7 +514,21 @@ static u32 sinful_joker_effect(
 
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
 
-    if (scored_card->suit == sinful_suit)
+    bool is_matching_suit = (scored_card->suit == sinful_suit);
+
+    // ---> START SMEARED JOKER SUIT FIX <---
+    // If it's not a perfect match, but we own Smeared Joker (ID 58), check the crossover!
+    if (!is_matching_suit && is_joker_owned(58)) { 
+        if (sinful_suit == HEARTS || sinful_suit == DIAMONDS) {
+            if (scored_card->suit == HEARTS || scored_card->suit == DIAMONDS) is_matching_suit = true;
+        }
+        else if (sinful_suit == SPADES || sinful_suit == CLUBS) {
+            if (scored_card->suit == SPADES || scored_card->suit == CLUBS) is_matching_suit = true;
+        }
+    }
+    // ---> END SMEARED JOKER SUIT FIX <---
+
+    if (is_matching_suit)
     {
         *joker_effect = &shared_joker_effect;
 
@@ -1926,6 +1954,38 @@ static u32 square_joker_effect(
         *joker_effect = &shared_joker_effect;
         (*joker_effect)->chips = *chips_bonus;
         flags |= JOKER_EFFECT_FLAG_CHIPS;
+    }
+    return flags;
+}
+static u32 smeared_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+) 
+{
+    // Smeared Joker is purely passive and alters the engine's flush detection. 
+    return JOKER_EFFECT_FLAG_NONE;
+}
+
+static u32 flash_card_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+) 
+{
+    u32 flags = JOKER_EFFECT_FLAG_NONE;
+    s32* mult_bonus = &(joker->persistent_state); 
+
+    if (joker_event == JOKER_EVENT_ON_JOKER_CREATED) {
+        *mult_bonus = 0; 
+    }
+
+    if (joker_event == JOKER_EVENT_INDEPENDENT && *mult_bonus > 0) {
+        *joker_effect = &shared_joker_effect;
+        (*joker_effect)->mult = *mult_bonus;
+        flags |= JOKER_EFFECT_FLAG_MULT;
     }
     return flags;
 }

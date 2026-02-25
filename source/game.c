@@ -1308,7 +1308,20 @@ static ContainedHandTypes compute_contained_hand_types(void)
     }
 
     // Flush
-    if (hand_contains_flush(suits))
+    bool has_flush = hand_contains_flush(suits);
+
+    if (is_joker_owned(58)) { 
+        int red_count = suits[HEARTS] + suits[DIAMONDS];
+        int black_count = suits[SPADES] + suits[CLUBS];
+        int required_size = get_straight_and_flush_size();
+        
+        // If we have 5 of ANY red card, or 5 of ANY black card, it's a flush!
+        if (red_count >= required_size || black_count >= required_size) {
+            has_flush = true;
+        }
+    }
+
+    if (has_flush)
     {
         hand_types.FLUSH = 1;
     }
@@ -2536,7 +2549,29 @@ static inline void select_flush_and_straight_cards_in_played_hand(void)
     if (hand_type == FLUSH || hand_type == STRAIGHT_FLUSH || hand_type == ROYAL_FLUSH)
     {
         bool flush_selection[MAX_HAND_SIZE] = {false};
-        find_flush_in_played_cards(played, played_top, min_len, flush_selection);
+        
+        // ---> START SMEARED JOKER SELECTION <---
+        if (is_joker_owned(58)) {
+            int red_count = 0, black_count = 0;
+            for (int i = 0; i <= played_top; i++) {
+                u8 suit = played[i]->card->suit;
+                if (suit == HEARTS || suit == DIAMONDS) red_count++;
+                if (suit == SPADES || suit == CLUBS) black_count++;
+            }
+            bool look_for_red = red_count >= min_len;
+            bool look_for_black = black_count >= min_len;
+            
+            // Mark all matching Smeared cards to visually "glow" when scored
+            for (int i = 0; i <= played_top; i++) {
+                u8 suit = played[i]->card->suit;
+                if (look_for_red && (suit == HEARTS || suit == DIAMONDS)) flush_selection[i] = true;
+                if (look_for_black && (suit == SPADES || suit == CLUBS)) flush_selection[i] = true;
+            }
+        } else {
+            find_flush_in_played_cards(played, played_top, min_len, flush_selection);
+        }
+        // ---> END SMEARED JOKER SELECTION <---
+
         // Add the results into the final selection
         for (int i = 0; i <= played_top; i++)
         {
@@ -4383,6 +4418,16 @@ static inline void game_shop_reroll(int* reroll_cost)
     money -= *reroll_cost;
     display_money(); // Update the money display
 
+    // ---> START FLASH CARD HOOK <---
+    for (int i = 0; i < list_get_len(&_owned_jokers_list); i++) {
+        JokerObject* joker_obj = (JokerObject*)list_get_at_idx(&_owned_jokers_list, i);
+        if (joker_obj->joker->id == 59) { 
+            joker_obj->joker->persistent_state += 2; // Add +2 Mult
+            joker_object_shake(joker_obj, UNDEFINED); // Visual wiggle!
+        }
+    }
+    // ---> END FLASH CARD HOOK <---
+
     ListItr itr = list_itr_create(&_shop_jokers_list);
     JokerObject* joker_object;
 
@@ -4930,7 +4975,7 @@ static inline void game_start(void)
     set_shop_joker_avail(54, false);
 
     // Debug: Force spawn all 4 custom Jokers instantly
-    // int test_jokers[] = {52, 55, 56, 57}; 
+    // int test_jokers[] = {58, 59, 56, 57}; 
     // for(int i = 0; i < 4; i++) {
     //     JokerObject* obj = joker_object_new(joker_new(test_jokers[i]));
     //     obj->sprite_object->y = int2fx(HELD_JOKERS_POS.y);
