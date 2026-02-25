@@ -8,4 +8,5 @@ DEF_STATE_INFO(GAME_STATE_SHOP, noop, game_shop_on_update, game_shop_on_exit)
 DEF_STATE_INFO(GAME_STATE_BLIND_SELECT, game_blind_select_on_init, game_blind_select_on_update, game_blind_select_on_exit)
 DEF_STATE_INFO(GAME_STATE_LOSE, game_lose_on_init, game_lose_on_update, game_over_on_exit)
 DEF_STATE_INFO(GAME_STATE_WIN, game_win_on_init, game_win_on_update, game_over_on_exit)
+DEF_STATE_INFO(GAME_STATE_SCORE_COMPARE, game_score_compare_on_init, game_score_compare_on_update, game_score_compare_on_exit)
 // clang-format on
