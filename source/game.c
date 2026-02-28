@@ -615,7 +615,7 @@ static int round = 0;
 static int ante = 0;
 static int money = 0;
 static u32 score = 0;
-int total_hands_played = 0; // This is the global count variable for Supernova
+int total_hands_played[16] = {0}; // An array to track each hand type for Supernova!
 int overkill_payout = 0; // This is overkill payout
 static u32 temp_score = 0; // This is the score that shows in the same spot as the hand type.
 static bool score_flames_active = false;
@@ -801,7 +801,9 @@ void game_init()
     money = STARTING_MONEY;
     score = STARTING_SCORE;
 
-    total_hands_played = 0; // Resets Supernova on new run
+    for (int i = 0; i < 16; i++) {
+        total_hands_played[i] = 0; 
+    } // Supernova
 
     blind_select_tokens[BLIND_TYPE_SMALL] = blind_token_new(
         BLIND_TYPE_SMALL,
@@ -2306,7 +2308,7 @@ static void game_playing_execute_play_hand(void)
     hand_state = HAND_PLAY;
     display_hands(--hands);
 
-    total_hands_played++; // Adds +1 every time a hand is played!
+    total_hands_played[hand_type]++; // Adds +1 to the SPECIFIC hand type played!
 }
 
 static int game_playing_hand_row_get_size(void)
@@ -2906,7 +2908,10 @@ static inline void game_playing_handle_round_over(void)
                     joker_object_score(joker_obj, NULL, JOKER_EVENT_ON_ROUND_END); 
                     
                     if (flags & JOKER_EFFECT_FLAG_EXPIRE) {
-                        if (joker_obj->joker->id == 53) set_shop_joker_avail(54, true); 
+                        if (joker_obj->joker->id == 53) {
+                            set_shop_joker_avail(54, true);  // Unseal Cavendish
+                            set_shop_joker_avail(53, false); // PERMANENTLY ban Gros Michel
+                        } 
                         if (joker_obj->joker->id == 104) set_shop_joker_avail(104, false); 
                         
                         remove_owned_joker(current_joker_idx);                                     

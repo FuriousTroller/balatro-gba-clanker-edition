@@ -9,7 +9,8 @@
 
 #define MISPRINT_MAX_MULT 23
 
-extern int total_hands_played; // Supernova thingy
+extern int total_hands_played[16];
+extern enum HandType* get_hand_type(void); // Bring in the hand type fetcher, Supernova thingy
 
 #define SCORE_ON_EVENT_ONLY_WITH_CARD(scored_card, restricted_event, checked_event) \
     if (checked_event != restricted_event || scored_card == NULL)                   \
@@ -1830,24 +1831,6 @@ static u32 sock_and_buskin_joker_effect(
     return effect_flags_ret;
 }
 
-// static u32 golden_joker_effect(
-//     Joker* joker,
-//     Card* scored_card,
-//     enum JokerEvent joker_event,
-//     JokerEffect** joker_effect
-// )
-// {
-//     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
-
-//     if (joker_event == JOKER_EVENT_ON_ROUND_END)
-//     {
-//         *joker_effect = &shared_joker_effect;
-//         (*joker_effect)->money = 4;
-//         effect_flags_ret = JOKER_EFFECT_FLAG_MONEY;
-//     }
-//     return effect_flags_ret;
-// }
-
 static u32 golden_joker_effect(Joker* joker, Card* scored_card, enum JokerEvent joker_event, JokerEffect** joker_effect) {
     if (joker_event == JOKER_EVENT_ON_ROUND_END) {
         *joker_effect = &shared_joker_effect;
@@ -1918,7 +1901,7 @@ static u32 supernova_joker_effect(
     if (joker_event == JOKER_EVENT_INDEPENDENT) {
         *joker_effect = &shared_joker_effect;
         // Mult equals the total hands played this run!
-        (*joker_effect)->mult = total_hands_played; 
+        (*joker_effect)->mult = total_hands_played[*get_hand_type()];
         return JOKER_EFFECT_FLAG_MULT;
     }
     return JOKER_EFFECT_FLAG_NONE;
