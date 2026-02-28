@@ -6,6 +6,11 @@
 #include "custom_joker_sheet_1.h"
 // #include "custom_joker_sheet_x.h" // Add this when you make IDs 1xx & 1xx!
 
+// Creates a local shared memory struct specifically for your modded cards to use
+static JokerEffect shared_joker_effect = {0};
+
+// Tells the compiler to go find this variable inside game.c
+extern int overkill_payout;
 #define MODDED_JOKER_START_ID 100
 #define NUM_JOKERS_PER_SPRITESHEET 2
 
@@ -82,6 +87,43 @@ static u32 voor_joker_effect(
     return JOKER_EFFECT_FLAG_NONE; 
 }
 
+static u32 capacocha_joker_effect(Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+) 
+{
+    if (joker_event == JOKER_EVENT_ON_JOKER_CREATED) {
+        joker->persistent_state = 2; // Starts with exactly 2 uses
+    }
+    
+    // Check for expiration at the end of the round
+    if (joker_event == JOKER_EVENT_ON_ROUND_END) {
+        if (joker->persistent_state <= 0) {
+            *joker_effect = &shared_joker_effect;
+            (*joker_effect)->message = "Sacrificed!";
+            (*joker_effect)->expire = true;
+            return JOKER_EFFECT_FLAG_MESSAGE | JOKER_EFFECT_FLAG_EXPIRE;
+        }
+    }
+    return JOKER_EFFECT_FLAG_NONE;
+}
+
+static u32 overkill_joker_effect(Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+) 
+{
+    if (joker_event == JOKER_EVENT_ON_ROUND_END) {
+        if (overkill_payout > 0) {
+            *joker_effect = &shared_joker_effect;
+            (*joker_effect)->money = overkill_payout; // The engine reads this directly
+            return JOKER_EFFECT_FLAG_MONEY;           // Triggers the popup in joker.c
+        }
+    }
+    return JOKER_EFFECT_FLAG_NONE;
+}
 
 // --- 2. YOUR MODDED REGISTRY ---
 
@@ -90,10 +132,12 @@ static u32 voor_joker_effect(
 // Because we set NUM_JOKERS_PER_SPRITESHEET to 2, 
 // Mobius reads the Left half, Last Dance reads the Right half!
 const JokerInfo modded_joker_registry[] = {
-    { UNCOMMON_JOKER,  7, mobius_joker_effect     }, // Local Index 0 -> In-game ID: 100 (Mobius = Recursion)
-    { RARE_JOKER, 20, last_dance_joker_effect }, // Local Index 1 -> In-game ID: 101
-    { COMMON_JOKER,    7, voor_joker_effect       }, // ID 102
-    { UNCOMMON_JOKER, 10, jaker_joker_effect      }, // ID 103
+    { UNCOMMON_JOKER,        7,      mobius_joker_effect           }, // Index 0 -> ID 100 (Mobius)
+    { RARE_JOKER,            20,     last_dance_joker_effect       }, // Index 1 -> ID 101 (Last Dance)
+    { COMMON_JOKER,          7,      voor_joker_effect             }, // Index 2 -> ID 102 (Voor)
+    { UNCOMMON_JOKER,        10,     jaker_joker_effect            }, // Index 3 -> ID 103 (Jaker)
+    { RARE_JOKER,            8,      capacocha_joker_effect        }, // Index 4 -> ID 104 (Capacocha)
+    { COMMON_JOKER,          6,      overkill_joker_effect         }, // Index 5 -> ID 105 (Overkill)
 };
 
 

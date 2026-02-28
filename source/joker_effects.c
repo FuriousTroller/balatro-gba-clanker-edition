@@ -1830,22 +1830,31 @@ static u32 sock_and_buskin_joker_effect(
     return effect_flags_ret;
 }
 
-static u32 golden_joker_effect(
-    Joker* joker,
-    Card* scored_card,
-    enum JokerEvent joker_event,
-    JokerEffect** joker_effect
-)
-{
-    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
+// static u32 golden_joker_effect(
+//     Joker* joker,
+//     Card* scored_card,
+//     enum JokerEvent joker_event,
+//     JokerEffect** joker_effect
+// )
+// {
+//     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
 
-    if (joker_event == JOKER_EVENT_ON_ROUND_END)
-    {
+//     if (joker_event == JOKER_EVENT_ON_ROUND_END)
+//     {
+//         *joker_effect = &shared_joker_effect;
+//         (*joker_effect)->money = 4;
+//         effect_flags_ret = JOKER_EFFECT_FLAG_MONEY;
+//     }
+//     return effect_flags_ret;
+// }
+
+static u32 golden_joker_effect(Joker* joker, Card* scored_card, enum JokerEvent joker_event, JokerEffect** joker_effect) {
+    if (joker_event == JOKER_EVENT_ON_ROUND_END) {
         *joker_effect = &shared_joker_effect;
-        (*joker_effect)->money = 4;
-        effect_flags_ret = JOKER_EFFECT_FLAG_MONEY;
+        (*joker_effect)->money = 4;             // Sets the payout
+        return JOKER_EFFECT_FLAG_MONEY;         // Triggers the popup in joker.c
     }
-    return effect_flags_ret;
+    return JOKER_EFFECT_FLAG_NONE;
 }
 
 static u32 gros_michel_joker_effect(

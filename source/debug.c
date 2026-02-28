@@ -134,6 +134,8 @@ static const char* const debug_modded_joker_names[] = {
     [1] = "LastDance",  // ID 101
     [2] = "Joker Voorhees", // ID 103
     [3] = "Jaker", // ID 104
+    [4] = "Capacocha", // ID 105
+    [5] = "Overkill",
     /* [4] = "YourNext",  // ID 102 – add your next modded joker here */
 };
 

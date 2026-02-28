@@ -616,6 +616,7 @@ static int ante = 0;
 static int money = 0;
 static u32 score = 0;
 int total_hands_played = 0; // This is the global count variable for Supernova
+int overkill_payout = 0; // This is overkill payout
 static u32 temp_score = 0; // This is the score that shows in the same spot as the hand type.
 static bool score_flames_active = false;
 static FIXED lerped_score = 0;
@@ -1437,14 +1438,15 @@ static ContainedHandTypes compute_contained_hand_types(void)
     // ---> END MOBIUS JOKER STRAIGHT CHECK <---
 
     // Flush
-    bool has_flush = hand_contains_flush(suits);
+    bool has_flush = hand_contains_flush(suits); // Reverted to the standard function
 
-    if (is_joker_owned(58)) {
+    if (is_joker_owned(58)) { // Smeared Joker
         int red_count = suits[HEARTS] + suits[DIAMONDS];
         int black_count = suits[SPADES] + suits[CLUBS];
-        int required_size = get_straight_and_flush_size();
-
-        // If we have 5 of ANY red card, or 5 of ANY black card, it's a flush!
+        
+        // This will dynamically be 4 or 5 depending on Four Fingers!
+        int required_size = get_straight_and_flush_size(); 
+        
         if (red_count >= required_size || black_count >= required_size) {
             has_flush = true;
         }
@@ -2854,93 +2856,88 @@ static void ai_auto_play(void)
 
 static inline void game_playing_handle_round_over(void)
 {
-    // --- AI MOD LOGIC ---
-    if (ai_mode_enabled)
-    {
-        if (!ai_is_playing)
-        {
-            player_round_score = score;
-            game_ai_turn_start();
-            return;
-        }
-
-        ai_round_score = score;
-        ai_is_playing  = false;
-        game_ai_turn_end();
-        game_change_state(GAME_STATE_SCORE_COMPARE);
-        return;
+    if (ai_mode_enabled) {
+        if (!ai_is_playing) { player_round_score = score; game_ai_turn_start(); return; }
+        ai_round_score = score; ai_is_playing = false; game_ai_turn_end();
+        game_change_state(GAME_STATE_SCORE_COMPARE); return;
     }
 
     enum GameState next_state = GAME_STATE_ROUND_END;
+    u32 req = blind_get_requirement(current_blind, ante);
 
     // --- 1. WIN / LOSS CHECK ---
-    // We check the score against the CURRENT Ante requirement
-    if (score >= blind_get_requirement(current_blind, ante))
-    {
-        if (current_blind == BLIND_TYPE_BOSS && ante >= MAX_ANTE)
-        {
-            next_state = GAME_STATE_WIN; // Beat Ante 8!
-        }
-    }
-    else if (hands == 0)
-    {
-        next_state = GAME_STATE_LOSE; // Out of hands and didn't reach the score
+    if (score >= req) {
+        if (current_blind == BLIND_TYPE_BOSS && ante >= MAX_ANTE) { next_state = GAME_STATE_WIN; }
+    } else {
+        next_state = GAME_STATE_LOSE;
     }
 
-    // --- 2. JOKER ROUND END HOOK ---
+    // ---> START OVERKILL JOKER MATH (ID 104) <---
+    overkill_payout = 0;
+    if (score >= req * 2) overkill_payout = 10;
+    else if (score >= req + (req / 2)) overkill_payout = 7;
+    else if (score >= req + (req / 4)) overkill_payout = 4;
+    // ---> END OVERKILL JOKER MATH <---
+
+    // ---> START SEQUENTIAL ROUND END HOOK <---
     if (next_state == GAME_STATE_ROUND_END || next_state == GAME_STATE_WIN)
     {
-        static bool jokers_processed = false;
-        static int delay_timer = 0;
+        static int current_joker_idx = 0;
+        static bool initialized = false;
 
-        if (!jokers_processed)
+        if (!initialized) { current_joker_idx = 0; initialized = true; timer = TM_ZERO; }
+
+        if (timer % 30 == 0) 
         {
-            for (int i = 0; i < list_get_len(&_owned_jokers_list); i++)
+            bool joker_scored = false;
+
+            while (current_joker_idx < list_get_len(&_owned_jokers_list))
             {
-                JokerObject* joker_obj = (JokerObject*)list_get_at_idx(&_owned_jokers_list, i);
+                JokerObject* joker_obj = (JokerObject*)list_get_at_idx(&_owned_jokers_list, current_joker_idx);
                 JokerEffect* effect = NULL;
                 u32 flags = joker_get_score_effect(joker_obj->joker, NULL, JOKER_EVENT_ON_ROUND_END, &effect);
-
-                if (flags & JOKER_EFFECT_FLAG_MONEY)
+                
+                if (flags != JOKER_EFFECT_FLAG_NONE) 
                 {
-                    money += effect->money;
-                    display_money();
-                    joker_object_score(joker_obj, NULL, JOKER_EVENT_ON_ROUND_END);
-                }
+                    tte_erase_rect_wrapper(PLAYED_CARDS_SCORES_RECT); 
 
-                if (flags & JOKER_EFFECT_FLAG_EXPIRE)
-                {
-                    joker_object_score(joker_obj, NULL, JOKER_EVENT_ON_ROUND_END);
-                    set_shop_joker_avail(54, true);
+                    if (flags & JOKER_EFFECT_FLAG_EXPIRE) erase_price_under_sprite_object(joker_obj->sprite_object); 
 
-                    erase_price_under_sprite_object(joker_obj->sprite_object);
-                    remove_owned_joker(i);
-                    joker_start_discard_animation(joker_obj);
-                    i--;
+                    joker_object_score(joker_obj, NULL, JOKER_EVENT_ON_ROUND_END); 
+                    
+                    if (flags & JOKER_EFFECT_FLAG_EXPIRE) {
+                        if (joker_obj->joker->id == 53) set_shop_joker_avail(54, true); 
+                        if (joker_obj->joker->id == 104) set_shop_joker_avail(104, false); 
+                        
+                        remove_owned_joker(current_joker_idx);                                     
+                        joker_start_discard_animation(joker_obj);
+                    } else {
+                        current_joker_idx++; 
+                    }
+                    
+                    joker_scored = true;
+                    break; 
+                } else {
+                    current_joker_idx++; 
                 }
             }
 
-            jokers_processed = true;
-            delay_timer = timer;
-        }
+            if (!joker_scored) {
+                initialized = false;
+                tte_erase_rect_wrapper(PLAYED_CARDS_SCORES_RECT); 
 
-        // Wait exactly 120 frames before leaving the screen
-        if (timer < delay_timer + 120)
-        {
-            return;
-        }
-
-        // --- 3. POST-DELAY CLEANUP & ANTE INCREMENT ---
-        // This is safe because it only happens once the wait is completely over!
-        tte_erase_rect_wrapper(PLAYED_CARDS_SCORES_RECT);
-        jokers_processed = false;
-
-        if (current_blind == BLIND_TYPE_BOSS && next_state != GAME_STATE_WIN)
-        {
-            ante++;
-            display_ante(ante);
+                if (current_blind == BLIND_TYPE_BOSS && next_state != GAME_STATE_WIN) {
+                    ante++;
+                    display_ante(ante);
+                }
+            } else {
+                return; 
+            }
+        } else {
+            return; 
         }
     }
+    // ---> END SEQUENTIAL ROUND END HOOK <---
 
     game_change_state(next_state);
 }
@@ -3283,7 +3280,6 @@ static bool play_ended_played_cards_update(int played_idx)
 {
     if (!discarded_card && timer > FRAMES(40))
     {
-        // play the sound only once per card, when it is pushed off-screen to the right
         if (!sound_played)
         {
             play_sfx(
@@ -3294,45 +3290,33 @@ static bool play_ended_played_cards_update(int played_idx)
             sound_played = true;
         }
 
-        // card has exited the screen, now discard it and set it to NULL
         if (played[played_idx]->sprite_object->x >= int2fx(CARD_DISCARD_PNT.x))
         {
-            discard_push(played[played_idx]->card); // Push the card to the discard pile
+            discard_push(played[played_idx]->card); 
             card_object_destroy(&played[played_idx]);
 
-            // played_top--;
-            cards_drawn++; // This technically isn't drawing cards, I'm just reusing the variable
-            sound_played = false; // Allow for the sound for the next card to be played
+            cards_drawn++; 
+            sound_played = false; 
 
-            // we reached hand_top, all cards have been discarded
             if (played_idx == played_top)
             {
-                if (game_round_is_over())
-                {
-                    hand_state = HAND_SHUFFLING;
-                }
-                else
-                {
-                    hand_state = HAND_DRAW;
-                }
+                if (game_round_is_over()) { hand_state = HAND_SHUFFLING; }
+                else { hand_state = HAND_DRAW; }
 
                 play_state = PLAY_STARTING;
                 cards_drawn = 0;
                 hand_selections = 0;
-                played_top = -1; // Reset the played stack
+                played_top = -1; 
                 scored_card_index = 0;
                 _joker_scored_itr = list_itr_create(&_owned_jokers_list);
                 timer = TM_ZERO;
             }
-
-            return true; // return early to avoid accessing played[played_idx] == NULL
+            return true; 
         }
 
-        // put target X position off screen to the right
         played[played_idx]->sprite_object->tx = int2fx(CARD_DISCARD_PNT.x);
         discarded_card = true;
     }
-
     return false;
 }
 
@@ -3701,83 +3685,114 @@ static inline int hand_get_max_size(void)
     return hand_size;
 }
 
+static bool capacocha_is_active = false;
 static inline void game_playing_process_input_and_state(void)
 {
-if (hand_state == HAND_SELECT)
-    {
-        if (deck_get_size() == 0) 
-        {
-            hands = 0;
-            hand_state = HAND_SHUFFLING; // Trigger the end-of-round sequence
-            game_lose_on_init();
+    // ---> 1. CAPACOCHA HOSTAGE LOOP <---
+    // If active, block all other input/states and exclusively run this animation!
+    if (capacocha_is_active) {
+        u32 req = blind_get_requirement(current_blind, ante);
+        int cap_idx = -1;
+        for (int i = 0; i < list_get_len(&_owned_jokers_list); i++) {
+            JokerObject* j = list_get_at_idx(&_owned_jokers_list, i);
+            if (j->joker->id == 104 && j->joker->persistent_state > 0) { cap_idx = i; break; }
         }
-        if (ai_is_playing)
-        {
-            if (timer >= FRAMES(AI_THINK_DELAY_FRAMES))
-            {
-                ai_auto_play();
+
+        // SUCCESS: We reached the score requirement!
+        if (score >= req) {
+            // Wait precisely 15 frames so the final +X text flashes nicely before resuming
+            if (timer % 30 == 15) {
+                if (cap_idx != -1) {
+                    JokerObject* cap_obj = list_get_at_idx(&_owned_jokers_list, cap_idx);
+                    cap_obj->joker->persistent_state -= 1;
+                }
+                tte_erase_rect_wrapper(PLAYED_CARDS_SCORES_RECT);
+                capacocha_is_active = false; // RELEASE HOSTAGE
             }
+            return; 
         }
-        else
-        {
-            game_playing_process_hand_select_input();
+
+        // SACRIFICING: Still need score, and we have cards left to take
+        if (cap_idx != -1 && list_get_len(&_owned_jokers_list) - 1 > cap_idx) {
+            if (timer % 30 == 0) {
+                int target_idx = list_get_len(&_owned_jokers_list) - 1; 
+                JokerObject* target = list_get_at_idx(&_owned_jokers_list, target_idx);
+                
+                erase_price_under_sprite_object(target->sprite_object);
+                remove_owned_joker(target_idx);
+                joker_start_discard_animation(target);
+                
+                u32 bonus = (req * 5) / 100;
+                score += bonus;
+                display_score(score); // Add score natively
+                
+                JokerObject* cap_obj = list_get_at_idx(&_owned_jokers_list, cap_idx);
+                joker_object_shake(cap_obj, SFX_CARD_SELECT);
+
+                // Print the white "+X" text over Capacocha
+                tte_erase_rect_wrapper(PLAYED_CARDS_SCORES_RECT);
+                tte_set_pos(fx2int(cap_obj->sprite_object->x), 48);
+                tte_set_special(TTE_WHITE_PB * TTE_SPECIAL_PB_MULT_OFFSET);
+                char buf[16];
+                snprintf(buf, sizeof(buf), "+%lu", bonus);
+                tte_write(buf);
+            }
+            
+            // CRISP REFRESH: Erase the text exactly halfway through the cycle
+            if (timer % 30 == 15) {
+                tte_erase_rect_wrapper(PLAYED_CARDS_SCORES_RECT);
+            }
+            
+            return; // FREEZE THE REST OF THE ENGINE
+        } else {
+            // FAILURE: Out of cards, score STILL not met!
+            if (timer % 30 == 15) {
+                if (cap_idx != -1) {
+                    JokerObject* cap_obj = list_get_at_idx(&_owned_jokers_list, cap_idx);
+                    cap_obj->joker->persistent_state -= 1; // Burn a charge on fail
+                }
+                tte_erase_rect_wrapper(PLAYED_CARDS_SCORES_RECT);
+                capacocha_is_active = false; // RELEASE HOSTAGE
+            }
+            return; 
         }
     }
-    else if (play_state == PLAY_ENDING)
-    {
-        if (mult > 0)
-        {
-            // protect against score overflow
+
+    // ---> 2. REGULAR ENGINE LOGIC <---
+    if (hand_state == HAND_SELECT) {
+        if (deck_get_size() == 0) { hands = 0; hand_state = HAND_SHUFFLING; game_lose_on_init(); }
+        if (ai_is_playing) { if (timer >= FRAMES(AI_THINK_DELAY_FRAMES)) ai_auto_play(); }
+        else { game_playing_process_hand_select_input(); }
+    }
+    else if (play_state == PLAY_ENDING) {
+        if (mult > 0) {
             temp_score = u32_protected_mult(chips, mult);
             lerped_temp_score = int2fx(temp_score);
             lerped_score = int2fx(score);
-
             display_temp_score(temp_score);
-
-            chips = 0;
-            mult = 0;
-            display_mult();
-            display_chips();
-
-            static const int SCORE_CALC_SFX_PITCH_SHIFT = -102; // -10% OF MM_BASE_PITCH_RATE
-            static const int SCORE_CALC_SFX_VOLUME = 204;       // 80% MM_FULL_VOLUME
-
-            // The chips calculation SFX is the same as button
-            play_sfx(
-                SFX_BUTTON,
-                MM_BASE_PITCH_RATE + SCORE_CALC_SFX_PITCH_SHIFT,
-                SCORE_CALC_SFX_VOLUME
-            );
+            chips = 0; mult = 0;
+            display_mult(); display_chips();
+            play_sfx(SFX_BUTTON, MM_BASE_PITCH_RATE - 102, 204);
         }
     }
-    else if (play_state == PLAY_ENDED && timer % FRAMES(TM_SCORE_LERP_INTERVAL) == 0)
-    {
-        /* Using fixed point in case the score is lower than NUM_SCORE_LERP_STEPS and then
-         * then the division rounds it down to 0 and it's never added to the total.
-         * The operation is equivalent to
-         * fxdiv(int2fx(temp_score * get_game_speed()), int2fx(NUM_SCORE_LERP_STEPS))
-         */
+    else if (play_state == PLAY_ENDED && timer % FRAMES(TM_SCORE_LERP_INTERVAL) == 0) {
         lerped_temp_score -= int2fx(temp_score * get_game_speed()) / NUM_SCORE_LERP_STEPS;
         lerped_score += int2fx(temp_score * get_game_speed()) / NUM_SCORE_LERP_STEPS;
 
-        if (lerped_temp_score > 0)
-        {
-            // Set the score display first because it's more important
-            // in case there isn't enough time within the frame to display both
+        if (lerped_temp_score > 0) {
             display_score(fx2uint(lerped_score));
-
             display_temp_score(fx2uint(lerped_temp_score));
-        }
-        else
-        {
+        } else {
             score = u32_protected_add(score, temp_score);
-            temp_score = 0;
-            lerped_temp_score = 0;
-            lerped_score = 0;
-
-            tte_erase_rect_wrapper(TEMP_SCORE_RECT); // Just erase the temp score
-
+            temp_score = 0; lerped_temp_score = 0; lerped_score = 0;
+            tte_erase_rect_wrapper(TEMP_SCORE_RECT); 
             display_score(score);
+
+            // ---> 3. TRIGGER FLAG EXACTLY WHEN SCORE FINISHES <---
+            u32 req = blind_get_requirement(current_blind, ante);
+            if (hands == 0 && score < req && !ai_mode_enabled) {
+                capacocha_is_active = true; // TAKE HOSTAGE!
+            }
         }
     }
 }
@@ -3802,56 +3817,36 @@ static inline void game_playing_process_card_draw()
 
 static inline void game_playing_discarded_cards_loop(void)
 {
-    // Discarded cards loop (mainly for shuffling)
-    if (hand_get_size() == 0 && hand_state == HAND_SHUFFLING && discard_top >= -1 &&
-        timer > FRAMES(10))
+    // Do not allow the game to recall a single card if Capacocha is active
+    if (capacocha_is_active) return; 
+
+    if (hand_get_size() == 0 && hand_state == HAND_SHUFFLING && discard_top >= -1 && timer > FRAMES(10))
     {
-        // Change the background to the round end background. This is how it works in Balatro, so
-        // I'm doing it this way too.
+        static CardObject* discarded_card_object = NULL;
+
+        if (discard_top == -1 && discarded_card_object == NULL) {
+            game_playing_handle_round_over(); // Naturally goes to win/loss
+            return;
+        }
+
         change_background(BG_ROUND_END);
 
-        // We take each discarded card and put it back into the deck with a short animation
-        static CardObject* discarded_card_object = NULL;
-        if (discarded_card_object == NULL)
-        {
+        if (discarded_card_object == NULL && discard_top >= 0) {
             discarded_card_object = card_object_new(discard_pop());
-            // discarded_card_object->sprite = sprite_new(ATTR0_SQUARE | ATTR0_4BPP | ATTR0_AFF,
-            // ATTR1_SIZE_32,
-            // card_sprite_lut[discarded_card_object->card->suit][discarded_card_object->card->rank],
-            // 0, 0);
-            // Set the sprite for the discarded card object
             card_object_set_sprite(discarded_card_object, 0);
             sprite_object_reset_transform(discarded_card_object->sprite_object);
-
             discarded_card_object->sprite_object->tx = int2fx(204);
             discarded_card_object->sprite_object->ty = int2fx(112);
             discarded_card_object->sprite_object->x = int2fx(240);
             discarded_card_object->sprite_object->y = int2fx(80);
-
             card_object_update(discarded_card_object);
-        }
-        else
-        {
+        } else if (discarded_card_object != NULL) {
             card_object_update(discarded_card_object);
-
-            if (discarded_card_object->sprite_object->y >= discarded_card_object->sprite_object->ty)
-            {
-                deck_push(discarded_card_object->card); // Put the card back into the deck
+            if (discarded_card_object->sprite_object->y >= discarded_card_object->sprite_object->ty) {
+                deck_push(discarded_card_object->card); 
                 card_object_destroy(&discarded_card_object);
-
-                play_sfx(
-                    SFX_CARD_DRAW,
-                    MM_BASE_PITCH_RATE + PITCH_STEP_UNDISCARD_SFX,
-                    SFX_DEFAULT_VOLUME
-                );
+                play_sfx(SFX_CARD_DRAW, MM_BASE_PITCH_RATE + PITCH_STEP_UNDISCARD_SFX, SFX_DEFAULT_VOLUME);
             }
-        }
-
-        // If there are no more discarded cards, stop shuffling
-        if (discard_top == -1 && discarded_card_object == NULL)
-        {
-            // After HAND_SHUFFLING the round is over
-            game_playing_handle_round_over();
         }
     }
 }
