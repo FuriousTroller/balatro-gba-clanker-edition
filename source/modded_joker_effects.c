@@ -136,7 +136,7 @@ const JokerInfo modded_joker_registry[] = {
     { RARE_JOKER,            20,     last_dance_joker_effect       }, // Index 1 -> ID 101 (Last Dance)
     { COMMON_JOKER,          7,      voor_joker_effect             }, // Index 2 -> ID 102 (Voor)
     { UNCOMMON_JOKER,        10,     jaker_joker_effect            }, // Index 3 -> ID 103 (Jaker)
-    { RARE_JOKER,            8,      capacocha_joker_effect        }, // Index 4 -> ID 104 (Capacocha)
+    { RARE_JOKER,            18,      capacocha_joker_effect        }, // Index 4 -> ID 104 (Capacocha)
     { COMMON_JOKER,          6,      overkill_joker_effect         }, // Index 5 -> ID 105 (Overkill)
 };
 
