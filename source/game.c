@@ -1880,13 +1880,6 @@ static void change_background(enum BackgroundId id)
         GRIT_CPY(pal_bg_mem, background_main_menu_gfxPal);
         GRIT_CPY(&tile_mem[MAIN_BG_CBB], background_main_menu_gfxTiles);
         GRIT_CPY(&se_mem[MAIN_BG_SBB], background_main_menu_gfxMap);
-
-        // Disable the button highlight colors
-        memcpy16(
-            &pal_bg_mem[MAIN_MENU_PLAY_BUTTON_OUTLINE_PID],
-            &pal_bg_mem[MAIN_MENU_PLAY_BUTTON_MAIN_COLOR_PID],
-            1
-        );
     }
     else
     {
@@ -2171,6 +2164,9 @@ static void game_round_on_init()
     debug_on_round_init();
 }
 
+static int play_border_pid = -1;
+static int ai_border_pid = -1;
+
 static void game_main_menu_on_init()
 {
     affine_background_change_background(AFFINE_BG_MAIN_MENU);
@@ -2185,6 +2181,17 @@ static void game_main_menu_on_init()
     main_menu_ace->sprite_object->ty = int2fx(MAIN_MENU_ACE_T.y);
     main_menu_ace->sprite_object->y = main_menu_ace->sprite_object->ty;
     main_menu_ace->sprite_object->tscale = float2fx(0.8f);
+    // ---> START DYNAMIC PALETTE FINDER <---    
+    // Scan the exported colors to find your sacrificial border colors
+    for (int i = 0; i < 165; i++) {
+        if (pal_bg_mem[i] == 0x7C1E || pal_bg_mem[i] == 0x7C1F) play_border_pid = i; // Magenta
+        if (pal_bg_mem[i] == 0x7FE0) ai_border_pid = i; // Cyan
+    }
+
+    // Instantly mask them with their own background colors so they look borderless!
+    if (play_border_pid != -1) pal_bg_mem[play_border_pid] = 0x7E40; // Play Blue
+    if (ai_border_pid != -1)   pal_bg_mem[ai_border_pid]   = 0x295C; // Clanker Red
+    // ---> END DYNAMIC PALETTE FINDER <---
 }
 
 static void game_over_init(void)
@@ -5577,29 +5584,23 @@ static void game_main_menu_on_update(void)
     rng_seed++;
     if (key_curr_state() != key_prev_state()) rng_seed *= 2;
 
-    // --- 2. D-Pad Wrapping (0 -> 1 -> 2 -> 0) ---
+    // --- 2. D-Pad Navigation ---
     if (key_hit(KEY_LEFT))
     {
         selection_x--;
-        if (selection_x < 0)
-        {
-            selection_x = MAIN_MENU_IMPLEMENTED_BUTTONS - 1;
-        }
+        if (selection_x < 0) selection_x = MAIN_MENU_IMPLEMENTED_BUTTONS - 1;
         play_sfx(SFX_CARD_FOCUS, MM_BASE_PITCH_RATE, SFX_DEFAULT_VOLUME);
     }
     else if (key_hit(KEY_RIGHT))
     {
         selection_x++;
-        if (selection_x >= MAIN_MENU_IMPLEMENTED_BUTTONS)
-        {
-            selection_x = 0;
-        }
+        if (selection_x >= MAIN_MENU_IMPLEMENTED_BUTTONS) selection_x = 0;
         play_sfx(SFX_CARD_FOCUS, MM_BASE_PITCH_RATE, SFX_DEFAULT_VOLUME);
     }
 
-    // --- 3. Clear Previous Highlights (YOUR ORIGINAL LOGIC) ---
-    pal_bg_mem[MAIN_MENU_PLAY_BUTTON_OUTLINE_PID] = pal_bg_mem[MAIN_MENU_PLAY_BUTTON_MAIN_COLOR_PID];
-    pal_bg_mem[MAIN_MENU_AI_BUTTON_OUTLINE_PID]   = pal_bg_mem[MAIN_MENU_PLAY_BUTTON_MAIN_COLOR_PID];
+    // --- 3. Reset ALL borders to UNSELECTED Background Colors (Borderless Look) ---
+    if (play_border_pid != -1) pal_bg_mem[play_border_pid] = 0x7E40; // Back to Play Blue
+    if (ai_border_pid != -1)   pal_bg_mem[ai_border_pid]   = 0x295C; // Back to Clanker Red
 
     Rect mod_btn_rect = { 8, 144, 64, 160 };
     tte_erase_rect_wrapper(mod_btn_rect);
@@ -5631,8 +5632,8 @@ static void game_main_menu_on_update(void)
     }
     else if (selection_x == MAIN_MENU_PLAY_BTN_IDX)
     {
-        // YOUR ORIGINAL HIGHLIGHT LOGIC
-        pal_bg_mem[MAIN_MENU_PLAY_BUTTON_OUTLINE_PID] = BTN_HIGHLIGHT_COLOR;
+        // Hovered! Turn the PLAY border Pure White!
+        if (play_border_pid != -1) pal_bg_mem[play_border_pid] = 0x7FFF; 
 
         if (key_hit(SELECT_CARD))
         {
@@ -5643,8 +5644,8 @@ static void game_main_menu_on_update(void)
     }
     else if (selection_x == MAIN_MENU_AI_BTN_IDX)
     {
-        // YOUR ORIGINAL HIGHLIGHT LOGIC
-        pal_bg_mem[MAIN_MENU_AI_BUTTON_OUTLINE_PID] = BTN_HIGHLIGHT_COLOR;
+        // Hovered! Turn the CLANKER MODE border Pure White!
+        if (ai_border_pid != -1) pal_bg_mem[ai_border_pid] = 0x7FFF;
 
         if (key_hit(SELECT_CARD))
         {
