@@ -936,8 +936,14 @@ static inline void jokers_update_loop(void)
 
 void game_update()
 {
+    // 1. Record if the debug menu was open BEFORE we process any inputs
+    bool overlay_was_active = debug_is_overlay_active(); 
+
     debug_on_game_update();
-    if (debug_is_overlay_active())
+
+    // 2. If it was open before, OR is still open now, halt the engine!
+    // This perfectly blocks the 'B' button from bleeding into the base game.
+    if (overlay_was_active || debug_is_overlay_active())
         return;
 
     timer++;
@@ -1107,31 +1113,43 @@ void game_refresh_hud(void)
     display_ante(ante);
     display_round(round);
 
-    /* Redraw blind requirement (score min) and reward — these are paint-once
-     * TTE calls from game_round_on_init that must be restored after overlay. */
-    Rect blind_req_text_rect = BLIND_REQ_TEXT_RECT;
-    u32 blind_requirement = blind_get_requirement(current_blind, ante);
-    char blind_req_str_buff[UINT_MAX_DIGITS + 1];
-    truncate_uint_to_suffixed_str(
-        blind_requirement,
-        rect_width(&BLIND_REQ_TEXT_RECT) / TTE_CHAR_SIZE,
-        blind_req_str_buff
-    );
-    update_text_rect_to_right_align_str(&blind_req_text_rect, blind_req_str_buff, OVERFLOW_RIGHT);
-    tte_printf(
-        "#{P:%d,%d; cx:0x%X000}%s",
-        blind_req_text_rect.left,
-        blind_req_text_rect.top,
-        TTE_RED_PB,
-        blind_req_str_buff
-    );
-    tte_printf(
-        "#{P:%d,%d; cx:0x%X000}$%d",
-        BLIND_REWARD_RECT.left,
-        BLIND_REWARD_RECT.top,
-        TTE_YELLOW_PB,
-        blind_get_reward(current_blind)
-    );
+    // ---> START LINGERING TEXT FIX <---
+    // 1. Erase the rects to physically wipe any lingering "zombie" text
+    tte_erase_rect_wrapper(BLIND_REQ_TEXT_RECT);
+    tte_erase_rect_wrapper(BLIND_REWARD_RECT);
+
+    // 2. ONLY redraw the blind requirement if we are actively playing a round!
+    if (background == BG_CARD_SELECTING || background == BG_CARD_PLAYING)
+    {
+        Rect blind_req_text_rect = BLIND_REQ_TEXT_RECT;
+        u32 blind_requirement = blind_get_requirement(current_blind, ante);
+        char blind_req_str_buff[UINT_MAX_DIGITS + 1];
+        
+        truncate_uint_to_suffixed_str(
+            blind_requirement,
+            rect_width(&BLIND_REQ_TEXT_RECT) / TTE_CHAR_SIZE,
+            blind_req_str_buff
+        );
+        
+        update_text_rect_to_right_align_str(&blind_req_text_rect, blind_req_str_buff, OVERFLOW_RIGHT);
+        
+        tte_printf(
+            "#{P:%d,%d; cx:0x%X000}%s",
+            blind_req_text_rect.left,
+            blind_req_text_rect.top,
+            TTE_RED_PB,
+            blind_req_str_buff
+        );
+        
+        tte_printf(
+            "#{P:%d,%d; cx:0x%X000}$%d",
+            BLIND_REWARD_RECT.left,
+            BLIND_REWARD_RECT.top,
+            TTE_YELLOW_PB,
+            blind_get_reward(current_blind)
+        );
+    }
+    // ---> END LINGERING TEXT FIX <---
 }
 
 int get_game_speed(void)
@@ -5367,7 +5385,7 @@ static void game_blind_select_start_anim_seq()
 
 static void game_blind_select_handle_input()
 {
-if (key_hit(KEY_B))
+if (key_hit(KEY_B) && !key_is_down(KEY_SELECT))
     {
         // 1. Destroy the lingering Blind tokens
         sprite_destroy(&blind_select_tokens[BLIND_TYPE_SMALL]);
