@@ -5367,6 +5367,61 @@ static void game_blind_select_start_anim_seq()
 
 static void game_blind_select_handle_input()
 {
+if (key_hit(KEY_B))
+    {
+        // 1. Destroy the lingering Blind tokens
+        sprite_destroy(&blind_select_tokens[BLIND_TYPE_SMALL]);
+        sprite_destroy(&blind_select_tokens[BLIND_TYPE_BIG]);
+        sprite_destroy(&blind_select_tokens[BLIND_TYPE_BOSS]);
+
+        // 2. Erase the text layer
+        tte_erase_screen();
+
+        // 3. Clear Jokers out of RAM
+        while (list_get_len(&_owned_jokers_list) > 0)
+        {
+            JokerObject* joker_object = list_get_at_idx(&_owned_jokers_list, 0);
+            remove_owned_joker(0);
+            joker_object_destroy(&joker_object);
+        }
+        list_clear(&_owned_jokers_list);
+        list_clear(&_shop_jokers_list);
+
+        // 4. THE MEMORY LEAK FIX: Destroy the 52 playing cards!
+        // This frees the internal memory pool so the Ace of Spades can safely spawn.
+        while (deck_top >= 0) {
+            card_destroy(&deck[deck_top]);
+            deck_top--;
+        }
+        while (discard_top >= 0) {
+            card_destroy(&discard_pile[discard_top]);
+            discard_top--;
+        }
+        for (int i = 0; i <= hand_top; i++) {
+            if (hand[i] != NULL) {
+                card_destroy(&hand[i]->card);
+                card_object_destroy(&hand[i]);
+            }
+        }
+        hand_top = -1;
+        for (int i = 0; i <= played_top; i++) {
+            if (played[i] != NULL) {
+                card_destroy(&played[i]->card);
+                card_object_destroy(&played[i]);
+            }
+        }
+        played_top = -1;
+
+        // 5. Reset the core game variables
+        game_init(); 
+
+        affine_background_load_palette(affine_background_gfxPal);
+
+        // 6. Jump back to the main menu
+        game_change_state(GAME_STATE_MAIN_MENU); 
+        return; 
+    }
+
     if (timer == TM_BLIND_SELECT_START && current_blind == BLIND_TYPE_BOSS)
     {
         selection_y = 0;
