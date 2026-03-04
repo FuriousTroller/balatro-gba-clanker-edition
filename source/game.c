@@ -14,6 +14,7 @@
 #include "graphic_utils.h"
 #include "hand_analysis.h"
 #include "joker.h"
+#include "voucher.h"
 #include "list.h"
 #include "selection_grid.h"
 #include "soundbank.h"
@@ -293,6 +294,9 @@ static bool shop_reroll_row_on_selection_changed(
     const Selection* new_selection
 );
 static int shop_reroll_row_get_size(void);
+static void shop_voucher_row_on_key_transit(SelectionGrid* selection_grid, Selection* selection);
+static bool shop_voucher_row_on_selection_changed(SelectionGrid* selection_grid, int row_idx, const Selection* prev_selection, const Selection* new_selection);
+static int shop_voucher_row_get_size(void);
 static bool shop_top_row_on_selection_changed(
     SelectionGrid* selection_grid,
     int row_idx,
@@ -490,7 +494,8 @@ Button game_playing_buttons[] = {
 SelectionGridRow shop_selection_rows[] = {
     {0, jokers_sel_row_get_size,  jokers_sel_row_on_selection_changed,  jokers_sel_row_on_key_transit,  {.wrap = false}},
     {1, shop_top_row_get_size,    shop_top_row_on_selection_changed,    shop_top_row_on_key_transit,    {.wrap = false}},
-    {2, shop_reroll_row_get_size, shop_reroll_row_on_selection_changed, shop_reroll_row_on_key_transit, {.wrap = false}}
+    {2, shop_reroll_row_get_size, shop_reroll_row_on_selection_changed, shop_reroll_row_on_key_transit, {.wrap = false}},
+    {3, shop_voucher_row_get_size, shop_voucher_row_on_selection_changed, shop_voucher_row_on_key_transit, {.wrap = false}}
 };
 
 static const Selection SHOP_INIT_SEL = {-1, 1};
@@ -548,6 +553,7 @@ static const SubStateActionFn round_end_state_actions[] = {
 };
 
 static int reroll_cost = REROLL_BASE_COST;
+int current_shop_joker_slots = 2; // Default vanilla size
 
 // The current game state, this is used to determine what the game is doing at any given time
 static enum GameState game_state = GAME_STATE_UNDEFINED;
@@ -739,7 +745,7 @@ void game_init()
     _joker_scored_itr = list_itr_create(&_owned_jokers_list);
 
     jokers_available_to_shop_init();
-
+    voucher_init();
     hands = max_hands;
     discards = max_discards;
     timer = TM_ZERO;
@@ -2363,6 +2369,7 @@ static inline void game_playing_handle_round_over(void)
             if (ante < MAX_ANTE)
             {
                 display_ante(++ante);
+                roll_new_shop_voucher();
             }
             else
             {
@@ -3978,10 +3985,25 @@ static void game_shop_create_items(void)
     list_clear(&_shop_jokers_list);
     _shop_jokers_list = list_create();
 
-    for (int i = 0; i < MAX_SHOP_JOKERS; i++)
+    // --------------------------------------------------------
+    // DYNAMIC JOKER SPACING (Calculated exactly once!)
+    // --------------------------------------------------------
+    int start_x = 120;
+    int spacing = 32; // 32px means zero margin (edges perfectly touch)
+
+    if (current_shop_joker_slots == 3) {
+        start_x = 104; // Perfectly centers the 3 cards
+        spacing = 32;  // Zero margin, strictly touching
+    } else if (current_shop_joker_slots >= 4) {
+        start_x = 92;  // Tucks safely away from the left UI border
+        spacing = 28;  // 4px overlap so they all fit!
+    }
+    // --------------------------------------------------------
+
+    for (int i = 0; i < current_shop_joker_slots; i++)
     {
         int joker_id = 0;
-#ifdef TEST_JOKER_ID0 // Allow defining an ID for a joker to always appear in shop and be tested
+#ifdef TEST_JOKER_ID0 
         if (is_shop_joker_avail(TEST_JOKER_ID0))
         {
             joker_id = TEST_JOKER_ID0;
@@ -3999,7 +4021,6 @@ static void game_shop_create_items(void)
             joker_id = game_shop_get_rand_available_joker_id();
         }
 
-        // If for some reason only no joker is left, don't make another
         if (joker_id == UNDEFINED)
             break;
 
@@ -4007,7 +4028,8 @@ static void game_shop_create_items(void)
 
         JokerObject* joker_object = joker_object_new(joker_new(joker_id));
 
-        joker_object->sprite_object->x = int2fx(120 + i * CARD_SPRITE_SIZE);
+        // APPLY THE MATH HERE
+        joker_object->sprite_object->x = int2fx(start_x + i * spacing);
         joker_object->sprite_object->y = int2fx(160);
         joker_object->sprite_object->tx = joker_object->sprite_object->x;
         joker_object->sprite_object->ty = int2fx(ITEM_SHOP_Y);
@@ -4025,20 +4047,27 @@ static void game_shop_create_items(void)
 }
 
 // Intro sequence (menu and shop icon coming into frame)
-static void game_shop_intro()
+static void game_shop_intro(void)
 {
     main_bg_se_copy_rect_1_tile_vert(POP_MENU_ANIM_RECT, SCREEN_UP);
 
     if (timer == TM_CREATE_SHOP_ITEMS_WAIT)
     {
         game_shop_create_items();
+
+        // VOUCHER UI: Spawn directly in the bottom-left dark box
+        spawn_shop_voucher_sprite();
+        
+        if (get_current_shop_voucher_object() != NULL) {
+            VoucherObject* v = get_current_shop_voucher_object();
+            print_price_under_sprite_object(v->sprite_object, v->info->cost);
+        }
     }
 
     if (timer >= TM_SHIFT_SHOP_ICON_WAIT) // Shift the shop icon
     {
         int timer_offset = timer - 6;
 
-        // TODO: Extract to generic function?
         for (int y = 0; y < timer_offset; y++)
         {
             int y_from = 26 + y - timer_offset;
@@ -4376,6 +4405,57 @@ static void shop_reroll_row_on_key_transit(SelectionGrid* selection_grid, Select
     }
 }
 
+// ----------------------------------------------------
+// VOUCHER SELECTION GRID LOGIC
+// ----------------------------------------------------
+static int shop_voucher_row_get_size(void)
+{
+    // Only exists in the grid if it hasn't been bought!
+    return get_current_shop_voucher_object() != NULL ? 1 : 0;
+}
+
+static bool shop_voucher_row_on_selection_changed(
+    SelectionGrid* selection_grid,
+    int row_idx,
+    const Selection* prev_selection,
+    const Selection* new_selection
+)
+{
+    VoucherObject* voucher = get_current_shop_voucher_object();
+    if (voucher == NULL) return true;
+
+    if (row_idx == prev_selection->y)
+    {
+        sprite_object_set_focus(voucher->sprite_object, false);
+    }
+    else if (row_idx == new_selection->y)
+    {
+        sprite_object_set_focus(voucher->sprite_object, true);
+    }
+
+    return true;
+}
+
+static void shop_voucher_row_on_key_transit(SelectionGrid* selection_grid, Selection* selection)
+{
+    if (!key_hit(SELECT_CARD)) return;
+
+    VoucherObject* current_voucher = get_current_shop_voucher_object();
+
+    if (current_voucher != NULL && money >= current_voucher->info->cost) {
+        money -= current_voucher->info->cost;
+        display_money();
+
+        erase_price_under_sprite_object(current_voucher->sprite_object); 
+
+        buy_current_shop_voucher();
+        play_sfx(SFX_BUTTON, MM_BASE_PITCH_RATE, BUTTON_SFX_VOLUME);
+
+        // Push the cursor up to the reroll button so the game doesn't crash on an empty row!
+        selection_grid_move_selection_vert(selection_grid, -1);
+    }
+}
+
 // Shop menu input and selection
 static void game_shop_process_user_input()
 {
@@ -4400,15 +4480,13 @@ static void game_shop_process_user_input()
 }
 
 // Outro sequence (menu and shop icon going out of frame)
-static void game_shop_outro()
+static void game_shop_outro(void)
 {
     // Shift the shop panel
     main_bg_se_move_rect_1_tile_vert(POP_MENU_ANIM_RECT, SCREEN_DOWN);
 
     main_bg_se_copy_rect_1_tile_vert(TOP_LEFT_PANEL_ANIM_RECT, SCREEN_UP);
 
-    // TODO: make heads or tails of what's going on here and replace
-    // magic numbers.
     if (timer == 1)
     {
         tte_erase_rect_wrapper(SHOP_PRICES_TEXT_RECT); // Erase the shop prices text
@@ -4423,6 +4501,12 @@ static void game_shop_outro()
             }
         }
 
+        // SLIDE VOUCHER AWAY & ERASE PRICE
+        if (get_current_shop_voucher_object() != NULL && get_current_shop_voucher_object()->sprite_object != NULL) {
+            erase_price_under_sprite_object(get_current_shop_voucher_object()->sprite_object);
+            get_current_shop_voucher_object()->sprite_object->ty = int2fx(160);
+        }
+
         reset_top_left_panel_bottom_row();
     }
     else if (timer == 2)
@@ -4435,6 +4519,9 @@ static void game_shop_outro()
 
     if (timer >= MENU_POP_OUT_ANIM_FRAMES)
     {
+        // COMPLETELY FREE VOUCHER SPRITE MEMORY BEFORE BLIND SELECT
+        despawn_shop_voucher_sprite(); 
+        
         state_info[game_state].substate = GAME_SHOP_MAX; // Go to the next state
         timer = TM_ZERO;                                 // Reset the timer
     }
@@ -4482,6 +4569,9 @@ static void game_shop_on_update()
             }
         }
     }
+    if (get_current_shop_voucher_object() != NULL) {
+    sprite_object_update(get_current_shop_voucher_object()->sprite_object);
+}
 
     if (timer % 20 == 0)
     {
@@ -4828,6 +4918,8 @@ static inline void game_start(void)
             deck_push(card);
         }
     }
+
+    roll_new_shop_voucher();
 
     change_background(BG_BLIND_SELECT);
 

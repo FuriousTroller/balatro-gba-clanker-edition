@@ -1,0 +1,32 @@
+#ifndef VOUCHER_H
+#define VOUCHER_H
+
+#include <tonc.h>
+#include <stdbool.h>
+#include "sprite.h"
+
+typedef struct {
+    u8 id;
+    u8 upgraded_id; 
+    int cost;
+    void (*on_buy_func)(void); 
+} VoucherInfo;
+
+typedef struct {
+    const VoucherInfo* info;
+    SpriteObject* sprite_object;
+} VoucherObject;
+
+void voucher_init(void);
+const VoucherInfo* get_voucher_registry_entry(u8 id);
+bool is_voucher_owned(u8 id);
+
+void roll_new_shop_voucher(void); 
+void buy_current_shop_voucher(void);
+VoucherObject* get_current_shop_voucher_object(void);
+
+// NEW LIFECYCLE FUNCTIONS
+void spawn_shop_voucher_sprite(void);
+void despawn_shop_voucher_sprite(void);
+
+#endif // VOUCHER_H
