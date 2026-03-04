@@ -159,6 +159,9 @@ enum HandType* get_hand_type(void);
 int get_deck_top(void);
 int get_num_discards_remaining(void);
 int get_num_hands_remaining(void);
+void set_num_hands_remaining(int n);
+void set_num_discards_remaining(int n);
+void game_refresh_hud(void);
 
 u32 get_chips(void);
 void set_chips(u32 new_chips);
@@ -179,12 +182,3 @@ bool is_shortcut_joker_active(void);
 int get_straight_and_flush_size(void);
 
 #endif // GAME_H
-
-// --- DEBUG MENU DEPENDENCIES ---
-void game_refresh_hud(void);
-void set_num_hands_remaining(int n);
-void set_num_discards_remaining(int n);
-
-// Adding these just in case the compiler complains about them next!
-void set_chips(u32 new_chips);
-void set_mult(u32 new_mult);

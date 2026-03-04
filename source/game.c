@@ -5124,3 +5124,27 @@ static void game_win_on_update()
 
     game_over_process_user_input();
 }
+
+void set_num_hands_remaining(int n)
+{
+    hands = n;
+    display_hands(hands);
+}
+
+void set_num_discards_remaining(int n)
+{
+    discards = n;
+    display_discards(discards);
+}
+
+void game_refresh_hud(void)
+{
+    display_score(score);
+    display_money();
+    display_chips();
+    display_mult();
+    display_hands(hands);
+    display_discards(discards);
+    display_ante(ante);
+    display_round(round);
+}

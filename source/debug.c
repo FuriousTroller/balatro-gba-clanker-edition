@@ -32,6 +32,15 @@
 #include <stdio.h>
 #include <string.h>
 
+// --- PORTABLE EXTERNAL HOOKS ---
+// By declaring these here, debug.c never needs to worry about what version of game.h you are using!
+extern void game_refresh_hud(void);
+extern void set_num_hands_remaining(int n);
+extern void set_num_discards_remaining(int n);
+extern void set_chips(u32 new_chips);
+extern void set_mult(u32 new_mult);
+// -------------------------------
+
 #if 0 // --- FUTURE MOD SUPPORT ---
 extern size_t get_modded_registry_size(void);
 #endif
