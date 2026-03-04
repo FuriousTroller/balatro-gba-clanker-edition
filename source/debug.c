@@ -21,16 +21,16 @@
 
 #if DEBUG_ENABLED
 
-#include "game.h"
-#include "joker.h"
-#include "graphic_utils.h"
 #include "blind.h"
+#include "game.h"
+#include "graphic_utils.h"
+#include "joker.h"
 #include "list.h"
 #include "util.h"
 
-#include <tonc.h>
 #include <stdio.h>
 #include <string.h>
+#include <tonc.h>
 
 // --- PORTABLE EXTERNAL HOOKS ---
 // By declaring these here, debug.c never needs to worry about what version of game.h you are using!
@@ -50,9 +50,9 @@ extern size_t get_modded_registry_size(void);
  * ======================================================================== */
 
 /* Joker picker overlay state */
-static bool overlay_active    = false;
-static int  picker_cursor     = 0;
-static int  picker_scroll_top = 0;
+static bool overlay_active = false;
+static int picker_cursor = 0;
+static int picker_scroll_top = 0;
 static bool picker_needs_redraw = false;
 
 #define PICKER_VISIBLE_ROWS 16
@@ -63,19 +63,17 @@ static u16 prev_keys = 0;
 
 /* Vanilla joker names, indexed directly by joker ID 0-59. */
 static const char* const joker_names[] = {
-    [0]  = "Joker",    [1]  = "Greedy",   [2]  = "Lusty",    [3]  = "Wrathful",
-    [4]  = "Glutton",  [5]  = "Jolly",    [6]  = "Zany",     [7]  = "Mad",
-    [8]  = "Crazy",    [9]  = "Droll",    [10] = "Sly",      [11] = "Wily",
-    [12] = "Clever",   [13] = "Devious",  [14] = "Crafty",   [15] = "Half",
-    [16] = "Stencil",  [17] = "Photo",    [18] = "WalkTalk", [19] = "Banner",
-    [20] = "Bboard",   [21] = "MystSumt", [22] = "Misprint", [23] = "EvnStevn",
-    [24] = "Blue",     [25] = "OddTodd",  [26] = "Shortcut", [27] = "BizCard",
-    [28] = "ScaryFce", [29] = "Bootstrp", [30] = "Pareidol", [31] = "ResvPark",
-    [32] = "Abstract", [33] = "Bull",     [34] = "The Duo",  [35] = "The Trio",
-    [36] = "Family",   [37] = "Order",    [38] = "Tribe",    [39] = "Blueprnt",
-    [40] = "Brain",    [41] = "RsdFist",  [42] = "SmileyFc", [43] = "Acrobat",
-    [44] = "Dusk",     [45] = "Sock&Bus", [46] = "Hack",     [47] = "HangChad",
-    [48] = "4Fingers", [49] = "Scholar",  [50] = "Fibonacc", [51] = "Seltzer",
+    [0] = "Joker",     [1] = "Greedy",    [2] = "Lusty",     [3] = "Wrathful",  [4] = "Glutton",
+    [5] = "Jolly",     [6] = "Zany",      [7] = "Mad",       [8] = "Crazy",     [9] = "Droll",
+    [10] = "Sly",      [11] = "Wily",     [12] = "Clever",   [13] = "Devious",  [14] = "Crafty",
+    [15] = "Half",     [16] = "Stencil",  [17] = "Photo",    [18] = "WalkTalk", [19] = "Banner",
+    [20] = "Bboard",   [21] = "MystSumt", [22] = "Misprint", [23] = "EvnStevn", [24] = "Blue",
+    [25] = "OddTodd",  [26] = "Shortcut", [27] = "BizCard",  [28] = "ScaryFce", [29] = "Bootstrp",
+    [30] = "Pareidol", [31] = "ResvPark", [32] = "Abstract", [33] = "Bull",     [34] = "The Duo",
+    [35] = "The Trio", [36] = "Family",   [37] = "Order",    [38] = "Tribe",    [39] = "Blueprnt",
+    [40] = "Brain",    [41] = "RsdFist",  [42] = "SmileyFc", [43] = "Acrobat",  [44] = "Dusk",
+    [45] = "Sock&Bus", [46] = "Hack",     [47] = "HangChad", [48] = "4Fingers", [49] = "Scholar",
+    [50] = "Fibonacc", [51] = "Seltzer",
 };
 
 #if 0 // --- FUTURE MOD SUPPORT ---
@@ -98,7 +96,8 @@ static const char* const debug_modded_joker_names[] = {
 #define NUM_NAMED_JOKERS (int)(sizeof(joker_names) / sizeof(joker_names[0]))
 
 #if 0 // --- FUTURE MOD SUPPORT ---
-#define NUM_NAMED_MODDED (int)(sizeof(debug_modded_joker_names) / sizeof(debug_modded_joker_names[0]))
+#define NUM_NAMED_MODDED \
+    (int)(sizeof(debug_modded_joker_names) / sizeof(debug_modded_joker_names[0]))
 #define MODDED_JOKER_START_ID 100
 #endif
 
@@ -120,8 +119,8 @@ static const char* debug_get_joker_name(int joker_id)
     if (joker_id < MODDED_JOKER_START_ID)
     {
 #endif
-        if (joker_id >= 0 && joker_id < NUM_NAMED_JOKERS && joker_names[joker_id] != NULL)
-            return joker_names[joker_id];
+    if (joker_id >= 0 && joker_id < NUM_NAMED_JOKERS && joker_names[joker_id] != NULL)
+        return joker_names[joker_id];
 #if 0 // --- FUTURE MOD SUPPORT ---
     }
     else
@@ -151,14 +150,8 @@ static void debug_draw_picker(void)
     int total_jokers = (int)get_joker_registry_size();
 
     /* Header */
-    tte_printf(
-        "#{P:%d,%d; cx:0x%X000}== JOKER PICKER (%d) ==",
-        4, 0, TTE_WHITE_PB, total_jokers
-    );
-    tte_printf(
-        "#{P:%d,%d; cx:0x%X000}UP/DN:Scroll A:Add B:Close",
-        4, 8, TTE_YELLOW_PB
-    );
+    tte_printf("#{P:%d,%d; cx:0x%X000}== JOKER PICKER (%d) ==", 4, 0, TTE_WHITE_PB, total_jokers);
+    tte_printf("#{P:%d,%d; cx:0x%X000}UP/DN:Scroll A:Add B:Close", 4, 8, TTE_YELLOW_PB);
 
     /* Body: list of jokers */
     int y = PICKER_HEADER_ROWS * 8;
@@ -173,7 +166,14 @@ static void debug_draw_picker(void)
         char line[30];
 
         if (name)
-            snprintf(line, sizeof(line), "%s%3d %-8s", (idx == picker_cursor) ? ">" : " ", joker_id, name);
+            snprintf(
+                line,
+                sizeof(line),
+                "%s%3d %-8s",
+                (idx == picker_cursor) ? ">" : " ",
+                joker_id,
+                name
+            );
         else
             snprintf(line, sizeof(line), "%sID#%d", (idx == picker_cursor) ? ">" : " ", joker_id);
 
@@ -182,10 +182,7 @@ static void debug_draw_picker(void)
         if (owned)
             pb = TTE_BLUE_PB;
 
-        tte_printf(
-            "#{P:%d,%d; cx:0x%X000}%s%s",
-            4, y, pb, line, owned ? " [OWN]" : ""
-        );
+        tte_printf("#{P:%d,%d; cx:0x%X000}%s%s", 4, y, pb, line, owned ? " [OWN]" : "");
 
         y += 8;
     }
@@ -211,8 +208,8 @@ static void debug_picker_add_joker(int joker_id)
     }
 
     /* Position off-screen; held_jokers_update_loop will animate it in */
-    joker_object->sprite_object->x  = int2fx(108);
-    joker_object->sprite_object->y  = int2fx(10);
+    joker_object->sprite_object->x = int2fx(108);
+    joker_object->sprite_object->y = int2fx(10);
     joker_object->sprite_object->tx = int2fx(108);
     joker_object->sprite_object->ty = int2fx(10);
 
@@ -234,9 +231,9 @@ static void debug_process_picker_input(void)
     if (keys_hit & KEY_B)
     {
         overlay_active = false;
-        REG_DISPCNT |= DCNT_OBJ; /* restore sprites */
+        REG_DISPCNT |= DCNT_OBJ;                    /* restore sprites */
         tte_erase_rect_wrapper(DEBUG_OVERLAY_RECT); /* clear picker text */
-        game_refresh_hud(); /* redraw all HUD text the picker erased */
+        game_refresh_hud();                         /* redraw all HUD text the picker erased */
         prev_keys = keys_now;
         return;
     }

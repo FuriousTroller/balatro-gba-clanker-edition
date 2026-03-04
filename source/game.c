@@ -1,5 +1,5 @@
 #include "game.h"
-#include "debug.h"
+
 #include "affine_background.h"
 #include "affine_background_gfx.h"
 #include "audio_utils.h"
@@ -11,10 +11,10 @@
 #include "blind.h"
 #include "button.h"
 #include "card.h"
+#include "debug.h"
 #include "graphic_utils.h"
 #include "hand_analysis.h"
 #include "joker.h"
-#include "voucher.h"
 #include "list.h"
 #include "selection_grid.h"
 #include "soundbank.h"
@@ -22,6 +22,7 @@
 #include "sprite.h"
 #include "tonc_memdef.h"
 #include "util.h"
+#include "voucher.h"
 
 #include <maxmod.h>
 #include <stdint.h>
@@ -295,7 +296,12 @@ static bool shop_reroll_row_on_selection_changed(
 );
 static int shop_reroll_row_get_size(void);
 static void shop_voucher_row_on_key_transit(SelectionGrid* selection_grid, Selection* selection);
-static bool shop_voucher_row_on_selection_changed(SelectionGrid* selection_grid, int row_idx, const Selection* prev_selection, const Selection* new_selection);
+static bool shop_voucher_row_on_selection_changed(
+    SelectionGrid* selection_grid,
+    int row_idx,
+    const Selection* prev_selection,
+    const Selection* new_selection
+);
 static int shop_voucher_row_get_size(void);
 static bool shop_top_row_on_selection_changed(
     SelectionGrid* selection_grid,
@@ -492,9 +498,9 @@ Button game_playing_buttons[] = {
 };
 
 SelectionGridRow shop_selection_rows[] = {
-    {0, jokers_sel_row_get_size,  jokers_sel_row_on_selection_changed,  jokers_sel_row_on_key_transit,  {.wrap = false}},
-    {1, shop_top_row_get_size,    shop_top_row_on_selection_changed,    shop_top_row_on_key_transit,    {.wrap = false}},
-    {2, shop_reroll_row_get_size, shop_reroll_row_on_selection_changed, shop_reroll_row_on_key_transit, {.wrap = false}},
+    {0, jokers_sel_row_get_size,   jokers_sel_row_on_selection_changed,   jokers_sel_row_on_key_transit,   {.wrap = false}},
+    {1, shop_top_row_get_size,     shop_top_row_on_selection_changed,     shop_top_row_on_key_transit,     {.wrap = false}},
+    {2, shop_reroll_row_get_size,  shop_reroll_row_on_selection_changed,  shop_reroll_row_on_key_transit,  {.wrap = false}},
     {3, shop_voucher_row_get_size, shop_voucher_row_on_selection_changed, shop_voucher_row_on_key_transit, {.wrap = false}}
 };
 
@@ -876,7 +882,7 @@ static inline void jokers_update_loop(void)
 void game_update()
 {
     // 1. Record if the debug menu was open BEFORE we process any inputs
-    bool overlay_was_active = debug_is_overlay_active(); 
+    bool overlay_was_active = debug_is_overlay_active();
 
     debug_on_game_update();
 
@@ -4004,19 +4010,22 @@ static void game_shop_create_items(void)
     int start_x = 120;
     int spacing = 32; // 32px means zero margin (edges perfectly touch)
 
-    if (current_shop_joker_slots == 3) {
+    if (current_shop_joker_slots == 3)
+    {
         start_x = 104; // Perfectly centers the 3 cards
         spacing = 32;  // Zero margin, strictly touching
-    } else if (current_shop_joker_slots >= 4) {
-        start_x = 92;  // Tucks safely away from the left UI border
-        spacing = 28;  // 4px overlap so they all fit!
+    }
+    else if (current_shop_joker_slots >= 4)
+    {
+        start_x = 92; // Tucks safely away from the left UI border
+        spacing = 28; // 4px overlap so they all fit!
     }
     // --------------------------------------------------------
 
     for (int i = 0; i < current_shop_joker_slots; i++)
     {
         int joker_id = 0;
-#ifdef TEST_JOKER_ID0 
+#ifdef TEST_JOKER_ID0
         if (is_shop_joker_avail(TEST_JOKER_ID0))
         {
             joker_id = TEST_JOKER_ID0;
@@ -4070,8 +4079,9 @@ static void game_shop_intro(void)
 
         // VOUCHER UI: Spawn directly in the bottom-left dark box
         spawn_shop_voucher_sprite();
-        
-        if (get_current_shop_voucher_object() != NULL) {
+
+        if (get_current_shop_voucher_object() != NULL)
+        {
             VoucherObject* v = get_current_shop_voucher_object();
             print_price_under_sprite_object(v->sprite_object, v->info->cost);
         }
@@ -4435,7 +4445,8 @@ static bool shop_voucher_row_on_selection_changed(
 )
 {
     VoucherObject* voucher = get_current_shop_voucher_object();
-    if (voucher == NULL) return true;
+    if (voucher == NULL)
+        return true;
 
     if (row_idx == prev_selection->y)
     {
@@ -4451,15 +4462,17 @@ static bool shop_voucher_row_on_selection_changed(
 
 static void shop_voucher_row_on_key_transit(SelectionGrid* selection_grid, Selection* selection)
 {
-    if (!key_hit(SELECT_CARD)) return;
+    if (!key_hit(SELECT_CARD))
+        return;
 
     VoucherObject* current_voucher = get_current_shop_voucher_object();
 
-    if (current_voucher != NULL && money >= current_voucher->info->cost) {
+    if (current_voucher != NULL && money >= current_voucher->info->cost)
+    {
         money -= current_voucher->info->cost;
         display_money();
 
-        erase_price_under_sprite_object(current_voucher->sprite_object); 
+        erase_price_under_sprite_object(current_voucher->sprite_object);
 
         buy_current_shop_voucher();
         play_sfx(SFX_BUTTON, MM_BASE_PITCH_RATE, BUTTON_SFX_VOLUME);
@@ -4515,7 +4528,9 @@ static void game_shop_outro(void)
         }
 
         // SLIDE VOUCHER AWAY & ERASE PRICE
-        if (get_current_shop_voucher_object() != NULL && get_current_shop_voucher_object()->sprite_object != NULL) {
+        if (get_current_shop_voucher_object() != NULL &&
+            get_current_shop_voucher_object()->sprite_object != NULL)
+        {
             erase_price_under_sprite_object(get_current_shop_voucher_object()->sprite_object);
             get_current_shop_voucher_object()->sprite_object->ty = int2fx(160);
         }
@@ -4533,8 +4548,8 @@ static void game_shop_outro(void)
     if (timer >= MENU_POP_OUT_ANIM_FRAMES)
     {
         // COMPLETELY FREE VOUCHER SPRITE MEMORY BEFORE BLIND SELECT
-        despawn_shop_voucher_sprite(); 
-        
+        despawn_shop_voucher_sprite();
+
         state_info[game_state].substate = GAME_SHOP_MAX; // Go to the next state
         timer = TM_ZERO;                                 // Reset the timer
     }
@@ -4582,9 +4597,10 @@ static void game_shop_on_update()
             }
         }
     }
-    if (get_current_shop_voucher_object() != NULL) {
-    sprite_object_update(get_current_shop_voucher_object()->sprite_object);
-}
+    if (get_current_shop_voucher_object() != NULL)
+    {
+        sprite_object_update(get_current_shop_voucher_object()->sprite_object);
+    }
 
     if (timer % 20 == 0)
     {
