@@ -1,5 +1,5 @@
 #include "game.h"
-
+#include "debug.h"
 #include "affine_background.h"
 #include "affine_background_gfx.h"
 #include "audio_utils.h"
@@ -779,6 +779,8 @@ void game_init()
     obj_hide(blind_select_tokens[BLIND_TYPE_SMALL]->obj);
     obj_hide(blind_select_tokens[BLIND_TYPE_BIG]->obj);
     obj_hide(blind_select_tokens[BLIND_TYPE_BOSS]->obj);
+
+    debug_on_game_init();
 }
 
 static inline void discarded_jokers_update_loop(void)
@@ -873,6 +875,15 @@ static inline void jokers_update_loop(void)
 
 void game_update()
 {
+    // 1. Record if the debug menu was open BEFORE we process any inputs
+    bool overlay_was_active = debug_is_overlay_active(); 
+
+    debug_on_game_update();
+
+    // 2. If it was open before, OR is still open now, halt the engine!
+    if (overlay_was_active || debug_is_overlay_active())
+        return;
+
     timer++;
 
     jokers_update_loop();
@@ -1979,6 +1990,8 @@ static void game_round_on_init()
      * otherwise or for the buttons.
      */
     game_playing_selection_grid.selection = GAME_PLAYING_INIT_SEL;
+
+    debug_on_round_init();
 }
 
 static void game_main_menu_on_init()
