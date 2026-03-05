@@ -4007,13 +4007,15 @@ static void game_shop_create_items(void)
     // --------------------------------------------------------
     // DYNAMIC JOKER SPACING (Hard-capped at 3 cards max)
     // --------------------------------------------------------
-    int slots = current_shop_joker_slots; 
-    if (slots > 3) slots = 3; // Safety cap so we never break the UI
+    int slots = current_shop_joker_slots;
+    if (slots > 3)
+        slots = 3; // Safety cap so we never break the UI
 
     int start_x = 120;
     int spacing = CARD_SPRITE_SIZE; // Standard 32px
 
-    if (slots == 3) {
+    if (slots == 3)
+    {
         start_x = 111; // Moved 1 pixel left (Left Card = 111)
         spacing = 25;  // (Middle Card = 136, Right Card = 161)
     }
@@ -4022,7 +4024,7 @@ static void game_shop_create_items(void)
     for (int i = 0; i < slots; i++)
     {
         int joker_id = 0;
-#ifdef TEST_JOKER_ID0 
+#ifdef TEST_JOKER_ID0
         if (is_shop_joker_avail(TEST_JOKER_ID0))
         {
             joker_id = TEST_JOKER_ID0;
