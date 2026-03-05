@@ -71,6 +71,12 @@ void roll_new_shop_voucher(void)
 
     for (int i = 0; i < VOUCHER_REGISTRY_SIZE; i++) {
         u8 id = voucher_registry[i].id;
+
+        // ---> DISABLED VOUCHERS <---
+        // Temporarily ban Overstock Plus so it never spawns in the shop
+        if (id == 1) continue; 
+        // ---> DISABLED VOUCHERS <---
+        
         if (id == 1 && !_owned_vouchers[0]) continue; 
         if (!_owned_vouchers[id]) {
             eligible[num_eligible++] = id;

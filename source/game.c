@@ -4005,27 +4005,24 @@ static void game_shop_create_items(void)
     _shop_jokers_list = list_create();
 
     // --------------------------------------------------------
-    // DYNAMIC JOKER SPACING (Calculated exactly once!)
+    // DYNAMIC JOKER SPACING (Hard-capped at 3 cards max)
     // --------------------------------------------------------
+    int slots = current_shop_joker_slots; 
+    if (slots > 3) slots = 3; // Safety cap so we never break the UI
+
     int start_x = 120;
-    int spacing = 32; // 32px means zero margin (edges perfectly touch)
+    int spacing = CARD_SPRITE_SIZE; // Standard 32px
 
-    if (current_shop_joker_slots == 3)
-    {
-        start_x = 104; // Perfectly centers the 3 cards
-        spacing = 32;  // Zero margin, strictly touching
-    }
-    else if (current_shop_joker_slots >= 4)
-    {
-        start_x = 92; // Tucks safely away from the left UI border
-        spacing = 28; // 4px overlap so they all fit!
+    if (slots == 3) {
+        start_x = 111; // Moved 1 pixel left (Left Card = 111)
+        spacing = 25;  // (Middle Card = 136, Right Card = 161)
     }
     // --------------------------------------------------------
 
-    for (int i = 0; i < current_shop_joker_slots; i++)
+    for (int i = 0; i < slots; i++)
     {
         int joker_id = 0;
-#ifdef TEST_JOKER_ID0
+#ifdef TEST_JOKER_ID0 
         if (is_shop_joker_avail(TEST_JOKER_ID0))
         {
             joker_id = TEST_JOKER_ID0;
@@ -4050,9 +4047,9 @@ static void game_shop_create_items(void)
 
         JokerObject* joker_object = joker_object_new(joker_new(joker_id));
 
-        // APPLY THE MATH HERE
+        // Apply merged dynamic spacing math
         joker_object->sprite_object->x = int2fx(start_x + i * spacing);
-        joker_object->sprite_object->y = int2fx(160);
+        joker_object->sprite_object->y = int2fx(160); // Start below floor to slide up
         joker_object->sprite_object->tx = joker_object->sprite_object->x;
         joker_object->sprite_object->ty = int2fx(ITEM_SHOP_Y);
 
