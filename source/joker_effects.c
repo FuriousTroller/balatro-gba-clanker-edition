@@ -9,6 +9,7 @@
 
 #define MISPRINT_MAX_MULT 23
 
+extern int max_jokers;
 extern int total_hands_played[16];
 extern enum HandType* get_hand_type(void); // Bring in the hand type fetcher, Supernova thingy
 
@@ -855,7 +856,7 @@ static u32 joker_stencil_effect(
     // +1 xmult per empty joker slot...
     int num_jokers = list_get_len(jokers);
 
-    (*joker_effect)->xmult = (MAX_JOKERS_HELD_SIZE)-num_jokers;
+    (*joker_effect)->xmult = (max_jokers)-num_jokers;
 
     // ...and also each stencil_joker adds +1 xmult
     ListItr itr = list_itr_create(jokers);

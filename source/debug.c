@@ -33,6 +33,7 @@
 #include <string.h>
 
 extern size_t get_modded_registry_size(void);
+extern int max_jokers;
 
 /* ========================================================================
  * Internal state
@@ -237,7 +238,7 @@ static void debug_draw_picker(void)
 static void debug_picker_add_joker(int joker_id)
 {
     List* jokers_list = get_jokers_list();
-    if (list_get_len(jokers_list) >= MAX_JOKERS_HELD_SIZE)
+    if (list_get_len(jokers_list) >= max_jokers)
         return;
     if (is_joker_owned(joker_id))
         return;
