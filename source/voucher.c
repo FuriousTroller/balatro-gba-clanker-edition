@@ -134,7 +134,7 @@ void spawn_shop_voucher_sprite(void)
     _current_shop_voucher->sprite_object = sprite_object_new();
 
 #define VOUCHER_TID 512 // Safely out of the way of card tiles!
-#define VOUCHER_PB  10  // Keep this at 10 to protect your playing card colors!
+#define VOUCHER_PB  14  // Keep this at 14 to protect the playing card colors!
 
     // ---> UNIVERSAL GRAPHICS ROUTING LOGIC <---
     u8 v_id = _current_shop_voucher->info->id;

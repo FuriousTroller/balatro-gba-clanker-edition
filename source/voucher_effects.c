@@ -10,6 +10,12 @@ extern int max_hands;    // Your base hands variable
 extern int max_discards; // Your base discards variable
 extern int max_jokers;   // Your max joker slots variable
 
+// Import the native UI update functions from game.c!
+int get_num_hands_remaining(void);
+void set_num_hands_remaining(int n);
+int get_num_discards_remaining(void);
+void set_num_discards_remaining(int n);
+
 // --- OVERSTOCK ---
 void effect_overstock(void)
 {
@@ -37,21 +43,21 @@ void effect_reroll_glut(void)
 }
 
 // --- ONE-TIME STAT BOOSTS ---
-void effect_grabber(void)
-{
-    max_hands++;
+void effect_grabber(void) { 
+    max_hands++; 
+    set_num_hands_remaining(get_num_hands_remaining() + 1); 
 }
-void effect_nacho_tong(void)
-{
-    max_hands++;
+void effect_nacho_tong(void) { 
+    max_hands++; 
+    set_num_hands_remaining(get_num_hands_remaining() + 1); 
 }
-void effect_wasteful(void)
-{
-    max_discards++;
+void effect_wasteful(void) { 
+    max_discards++; 
+    set_num_discards_remaining(get_num_discards_remaining() + 1); 
 }
-void effect_recyclomancy(void)
-{
-    max_discards++;
+void effect_recyclomancy(void) { 
+    max_discards++; 
+    set_num_discards_remaining(get_num_discards_remaining() + 1); 
 }
 
 // --- BLANK / DARK MATTER ---

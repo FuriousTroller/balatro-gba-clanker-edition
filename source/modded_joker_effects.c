@@ -28,7 +28,7 @@ static JokerEffect modded_shared_joker_effect = {0};
 
 // --- 1. YOUR CUSTOM JOKER LOGIC ---
 
-static u32 mobius_joker_effect(
+static u32 recursion_joker_effect(
     Joker* joker, 
     Card* scored_card, 
     enum JokerEvent joker_event, 
@@ -251,18 +251,18 @@ static u32 j_joker_effect(Joker* joker, Card* scored_card, enum JokerEvent joker
 // Because we set NUM_JOKERS_PER_SPRITESHEET to 2, 
 // Mobius reads the Left half, Last Dance reads the Right half!
 const JokerInfo modded_joker_registry[] = {
-    { UNCOMMON_JOKER,        7,      mobius_joker_effect           }, // Index 0 -> ID 100 (Mobius)
-    { RARE_JOKER,            20,     last_dance_joker_effect       }, // Index 1 -> ID 101 (Last Dance)
-    { COMMON_JOKER,          7,      voor_joker_effect             }, // Index 2 -> ID 102 (Voor)
-    { UNCOMMON_JOKER,        10,     jaker_joker_effect            }, // Index 3 -> ID 103 (Jaker)
-    { RARE_JOKER,            18,     capacocha_joker_effect        }, // Index 4 -> ID 104 (Capacocha)
-    { COMMON_JOKER,          6,      overkill_joker_effect         }, // Index 5 -> ID 105 (Overkill)
-    { RARE_JOKER,            17,     jamming_joker_effect          }, // ID 106 (Jamming) Clanker
-    { RARE_JOKER,            13,     captcha_joker_effect          }, // ID 107 (CaptchA) Clanker
-    { RARE_JOKER,            15,     ddos_joker_effect             }, // ID 108 (DDoS Attack) Clanker
-    { UNCOMMON_JOKER,        12,     trojan_joker_effect           }, // ID 109 (Trojan Joker) Clanker
-    { RARE_JOKER,            16,     c_joker_effect                }, // ID 110 (Cyclone Joker)
-    { RARE_JOKER,            16,     j_joker_effect                }, // ID 111 (Joker Joker)
+    { UNCOMMON_JOKER,         5,     recursion_joker_effect        }, // Index 0 -> ID 100 (Recursion)
+    { RARE_JOKER,            12,     last_dance_joker_effect       }, // Index 1 -> ID 101 (Last Dance)
+    { COMMON_JOKER,           4,     voor_joker_effect             }, // Index 2 -> ID 102 (Voor)
+    { UNCOMMON_JOKER,         7,     jaker_joker_effect            }, // Index 3 -> ID 103 (Jaker)
+    { RARE_JOKER,            15,     capacocha_joker_effect        }, // Index 4 -> ID 104 (Capacocha)
+    { COMMON_JOKER,           6,     overkill_joker_effect         }, // Index 5 -> ID 105 (Overkill)
+    { RARE_JOKER,             7,     jamming_joker_effect          }, // ID 106 (Jamming) Clanker
+    { RARE_JOKER,             6,     captcha_joker_effect          }, // ID 107 (CaptchA) Clanker
+    { RARE_JOKER,             6,     ddos_joker_effect             }, // ID 108 (DDoS Attack) Clanker
+    { UNCOMMON_JOKER,         7,     trojan_joker_effect           }, // ID 109 (Trojan Joker) Clanker
+    { RARE_JOKER,            10,     c_joker_effect                }, // ID 110 (Cyclone Joker)
+    { RARE_JOKER,            10,     j_joker_effect                }, // ID 111 (Joker Joker)
 };
 
 

@@ -1609,7 +1609,7 @@ static u32 blueprint_brainstorm_joker_effect(
     // No need for this kind of init since these Jokers
     // will have their data copied when needed
     if (joker_event == JOKER_EVENT_ON_JOKER_CREATED ||
-        joker_event == JOKER_EVENT_ON_HAND_SCORED_END || joker_event == JOKER_EVENT_ON_ROUND_END)
+        joker_event == JOKER_EVENT_ON_HAND_SCORED_END)
     {
         return effect_flags_ret;
     }

@@ -3041,16 +3041,23 @@ static inline void game_playing_handle_round_over(void)
 
                     if (flags & JOKER_EFFECT_FLAG_EXPIRE)
                     {
-                        if (joker_obj->joker->id == 53)
+                        // 1. Save the ID before we remove the object!
+                        int expired_id = joker_obj->joker->id;
+
+                        // 2. Remove the card (This automatically returns it to the shop pool)
+                        remove_owned_joker(current_joker_idx);
+                        joker_start_discard_animation(joker_obj);
+
+                        // 3. Apply permanent bans AFTER it was returned to the pool!
+                        if (expired_id == 53)
                         {
                             set_shop_joker_avail(54, true);  // Unseal Cavendish
                             set_shop_joker_avail(53, false); // PERMANENTLY ban Gros Michel
                         }
-                        if (joker_obj->joker->id == 104)
-                            set_shop_joker_avail(104, false);
-
-                        remove_owned_joker(current_joker_idx);
-                        joker_start_discard_animation(joker_obj);
+                        if (expired_id == 104)
+                        {
+                            set_shop_joker_avail(104, false); // Ban Capacocha
+                        }
                     }
                     else
                     {
