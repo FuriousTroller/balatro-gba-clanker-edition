@@ -21,8 +21,8 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
-#include <tonc.h>
 #include <stdbool.h>
+#include <tonc.h>
 
 /* ========================================================================
  * MASTER SWITCH - set to 1 to enable all debug features, 0 to disable
@@ -37,10 +37,10 @@
 #if DEBUG_ENABLED
 
 /* Starting money override (-1 = use default) */
-#define DEBUG_START_MONEY         (-1)
+#define DEBUG_START_MONEY (-1)
 
 /* Force a specific joker to be added at round start (-1 = don't force) */
-#define DEBUG_FORCE_JOKER_ID      (-1)
+#define DEBUG_FORCE_JOKER_ID (-1)
 
 #endif /* DEBUG_ENABLED */
 
@@ -75,15 +75,22 @@ void debug_on_round_init(void);
  */
 bool debug_is_overlay_active(void);
 
-
-
 #else /* !DEBUG_ENABLED */
 
 /* No-op stubs so game.c doesn't need #if everywhere */
-static inline void debug_on_game_init(void)   {}
-static inline void debug_on_game_update(void)  {}
-static inline void debug_on_round_init(void)   {}
-static inline bool debug_is_overlay_active(void) { return false; }
+static inline void debug_on_game_init(void)
+{
+}
+static inline void debug_on_game_update(void)
+{
+}
+static inline void debug_on_round_init(void)
+{
+}
+static inline bool debug_is_overlay_active(void)
+{
+    return false;
+}
 
 #endif /* DEBUG_ENABLED */
 

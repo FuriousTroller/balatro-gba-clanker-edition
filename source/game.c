@@ -131,6 +131,9 @@
 #define SORT_BY_RANK_BTN_BORDER_PID 22
 #define SORT_BY_SUIT_BTN_BORDER_PID 23
 
+// Pentacle Binary Tracker!
+extern u8 acquired_sins_mask;
+
 // Naming the stage where cards return from the discard pile to the deck "undiscard"
 
 /* This needs to stay a power of 2 and small enough
@@ -1691,21 +1694,34 @@ static void change_background(enum BackgroundId id)
 
             // This would change the palette of the background to match the blind, but the backgroun
             // doesn't use the blind token's exact colors so a different approach is required
-            memset16(
-                &pal_bg_mem[BLIND_BG_PRIMARY_PID],
-                blind_get_color(current_blind, BLIND_BACKGROUND_MAIN_COLOR_INDEX),
-                1
-            );
-            memset16(
-                &pal_bg_mem[BLIND_BG_SECONDARY_PID],
-                blind_get_color(current_blind, BLIND_BACKGROUND_SECONDARY_COLOR_INDEX),
-                1
-            );
-            memset16(
-                &pal_bg_mem[BLIND_BG_SHADOW_PID],
-                blind_get_color(current_blind, BLIND_BACKGROUND_SHADOW_COLOR_INDEX),
-                1
-            );
+            // ---> START PENTACLE DARK BACKGROUND HOOK <---
+            if (is_joker_owned(117)) 
+            {
+                // The Final Awakening: Force the screen to turn Dark Gray / Black indefinitely!
+                memset16(&pal_bg_mem[BLIND_BG_PRIMARY_PID], RGB15(2, 2, 2), 1);
+                memset16(&pal_bg_mem[BLIND_BG_SECONDARY_PID], RGB15(5, 5, 5), 1);
+                memset16(&pal_bg_mem[BLIND_BG_SHADOW_PID], RGB15(1, 1, 1), 1);
+            } 
+            else 
+            {
+                // Vanilla Behavior: Change the palette of the background to match the blind
+                memset16(
+                    &pal_bg_mem[BLIND_BG_PRIMARY_PID],
+                    blind_get_color(current_blind, BLIND_BACKGROUND_MAIN_COLOR_INDEX),
+                    1
+                );
+                memset16(
+                    &pal_bg_mem[BLIND_BG_SECONDARY_PID],
+                    blind_get_color(current_blind, BLIND_BACKGROUND_SECONDARY_COLOR_INDEX),
+                    1
+                );
+                memset16(
+                    &pal_bg_mem[BLIND_BG_SHADOW_PID],
+                    blind_get_color(current_blind, BLIND_BACKGROUND_SHADOW_COLOR_INDEX),
+                    1
+                );
+            }
+            // ---> END PENTACLE DARK BACKGROUND HOOK <---
 
             for (int i = 0; i < NUM_ELEM_IN_ARR(game_playing_buttons); i++)
             {
@@ -2124,6 +2140,78 @@ static inline void deck_shuffle(void)
     }
 }
 
+void process_pentacle_evolution(void) {
+    List* jokers = get_jokers_list();
+    int num_jokers = list_get_len(jokers);
+    
+    // 1. UPDATE THE TRACKER (Check everything currently in your inventory)
+    for (int i = 0; i < num_jokers; i++) {
+        JokerObject* jo = list_get_at_idx(jokers, i);
+        int id = jo->joker->id;
+        
+        if (id == 1)   acquired_sins_mask |= (1 << 0); // Greedy
+        if (id == 2)   acquired_sins_mask |= (1 << 1); // Lusty
+        if (id == 3)   acquired_sins_mask |= (1 << 2); // Wrathful
+        if (id == 4)   acquired_sins_mask |= (1 << 3); // Gluttonous
+        if (id == 112) acquired_sins_mask |= (1 << 4); // Vainglorious
+        if (id == 113) acquired_sins_mask |= (1 << 5); // Sloth
+        if (id == 114) acquired_sins_mask |= (1 << 6); // Envy
+    }
+    
+    // Count exactly how many unique Sins you have touched this run
+    int sin_count = 0;
+    for (int i = 0; i < 7; i++) {
+        if (acquired_sins_mask & (1 << i)) sin_count++;
+    }
+    
+    // 2. THE UNLOCK: 2 Sins adds Form 1 to the shop pool!
+    if (sin_count >= 2) {
+        set_shop_joker_avail(115, true); 
+    }
+    
+    // 3. FIND THE PENTACLE: Check if we currently own it
+    int pentacle_id = 0;
+    JokerObject* pentacle_obj = NULL;
+    for (int i = 0; i < num_jokers; i++) {
+        JokerObject* jo = list_get_at_idx(jokers, i);
+        if (jo->joker->id == 115 || jo->joker->id == 116 || jo->joker->id == 117) {
+            pentacle_id = jo->joker->id;
+            pentacle_obj = jo;
+            break; // Found it!
+        }
+    }
+    
+    // 4. EVOLVE AND DEVOUR!
+    bool did_evolve = false;
+    if (pentacle_obj != NULL) {
+        
+        // Evolve to Form 2 (Red J)
+        if (pentacle_id == 115 && sin_count >= 4) {
+            pentacle_obj->joker->id = 116; 
+            did_evolve = true;
+        } 
+        // Evolve to Final Form (Full Red Pentacle)
+        else if (pentacle_id == 116 && sin_count >= 7) {
+            pentacle_obj->joker->id = 117; 
+            did_evolve = true;
+        }
+        
+        // The Sacrifice: If it evolved, eat the Sins to free up Joker slots!
+        if (did_evolve) {
+            // We MUST loop backwards so deleting items doesn't scramble the index!
+            for (int i = num_jokers - 1; i >= 0; i--) {
+                JokerObject* jo = list_get_at_idx(jokers, i);
+                int id = jo->joker->id;
+                if (id == 1 || id == 2 || id == 3 || id == 4 || 
+                    id == 112 || id == 113 || id == 114) {
+                    
+                    remove_owned_joker(i); 
+                }
+            }
+        }
+    }
+}
+
 static void game_round_on_init()
 {
     hand_state = HAND_DRAW;
@@ -2169,6 +2257,9 @@ static void game_round_on_init()
     display_hands(hands);
     display_discards(discards);
     // ---> END HOOK <---
+
+    // THE EXODIA TRIGGER: Eat the Sins right as the round starts!
+    process_pentacle_evolution();
 
     display_ante(ante);
 
@@ -5911,6 +6002,10 @@ static void game_blind_select_on_exit()
 
 static inline void game_start(void)
 {
+    acquired_sins_mask = 0;          // Reset the tracker!
+    set_shop_joker_avail(115, false); // Lock Pentacle Form 1
+    set_shop_joker_avail(116, false); // Lock Pentacle Form 2
+    set_shop_joker_avail(117, false); // Lock Pentacle Form 3
     tte_erase_screen();
     reset_shop_jokers(); // important for Modded Cards
     set_seed(rng_seed);

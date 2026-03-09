@@ -21,6 +21,10 @@ extern bool is_c_j_fusion_active(void);
 #define NUM_JOKERS_PER_SPRITESHEET 2
 static JokerEffect custom_joker_effect_out = {0};
 
+// Tracks which of the 7 Sins you have acquired this run!
+// Bits: 0=Greedy, 1=Lusty, 2=Wrathful, 3=Gluttonous, 4=Vainglorious, 5=Sloth, 6=Envy
+u8 acquired_sins_mask = 0;
+
 // --- 0. LOCAL EFFECT OBJECT ---
 // We use this local object so we don't conflict with the vanilla file's locked memory
 static JokerEffect modded_shared_joker_effect = {0};
@@ -244,6 +248,160 @@ static u32 j_joker_effect(Joker* joker, Card* scored_card, enum JokerEvent joker
     return JOKER_EFFECT_FLAG_NONE;
 }
 
+// --- THE SINS ---
+
+// 1. VAINGLORIOUS JOKER (Pride)
+// Gives x2 Mult per scored Face Card, ONLY if the entire played hand consists of Face Cards.
+static u32 vainglorious_joker_effect(Joker* joker, Card* scored_card, enum JokerEvent joker_event, JokerEffect** joker_effect) {
+    if (joker_event == JOKER_EVENT_ON_CARD_SCORED) {
+        CardObject** played = get_played_array();
+        int played_size = get_played_top() + 1;
+        bool only_faces = true;
+
+        // Check the entire played hand for numbered peasant cards
+        for (int i = 0; i < played_size; i++) {
+            if (!card_is_face(played[i]->card)) {
+                only_faces = false;
+                break; // A number card was found, break the loop and ruin the bonus
+            }
+        }
+
+        // If the hand is pure royalty, and the currently scoring card is a face card:
+        if (only_faces && card_is_face(scored_card)) {
+            *joker_effect = &modded_shared_joker_effect;
+            (*joker_effect)->xmult = 2; // GBA uses whole integers, so X2 Mult!
+            return JOKER_EFFECT_FLAG_XMULT;
+        }
+    }
+    return JOKER_EFFECT_FLAG_NONE;
+}
+
+// 2. SLOTH JOKER
+// X4 Mult if you are lazy enough to play exactly 1 card!
+static u32 sloth_joker_effect(Joker* joker, Card* scored_card, enum JokerEvent joker_event, JokerEffect** joker_effect) {
+    // We use JOKER_EVENT_INDEPENDENT so it multiplies the score AFTER the base chips/mult are tallied
+    if (joker_event == JOKER_EVENT_INDEPENDENT) {
+        int played_size = get_played_top() + 1;
+        
+        // Check if the player was lazy enough to only put a single card on the table
+        if (played_size == 1) {
+            *joker_effect = &modded_shared_joker_effect;
+            
+            (*joker_effect)->xmult = 4; // Massive X4 Mult reward!
+            
+            return JOKER_EFFECT_FLAG_XMULT;
+        }
+    }
+    return JOKER_EFFECT_FLAG_NONE;
+}
+
+// 3. ENVIOUS JOKER (ID 114)
+// Jealous of the Strong: The lowest value card played becomes 2x the value of the highest card!
+static u32 envious_joker_effect(Joker* joker, Card* scored_card, enum JokerEvent joker_event, JokerEffect** joker_effect) {
+    if (joker_event == JOKER_EVENT_ON_CARD_SCORED) {
+        CardObject** played = get_played_array();
+        int played_size = get_played_top() + 1;
+        if (played_size == 0) return JOKER_EFFECT_FLAG_NONE;
+
+        u8 max_val = 0;
+        u8 min_val = 255; 
+
+        for (int i = 0; i < played_size; i++) {
+            if (played[i] != NULL && played[i]->card != NULL) {
+                u8 val = card_get_value(played[i]->card);
+                if (val > max_val) max_val = val;
+                if (val < min_val) min_val = val;
+            }
+        }
+
+        if (card_get_value(scored_card) == min_val) {
+            int target_value = max_val * 2;
+            int bonus_chips = target_value - min_val;
+            if (bonus_chips > 0) {
+                *joker_effect = &modded_shared_joker_effect;
+                (*joker_effect)->chips = bonus_chips;
+                return JOKER_EFFECT_FLAG_CHIPS;
+            }
+        }
+    }
+    return JOKER_EFFECT_FLAG_NONE;
+}
+
+// 4. THE PENTACLE (IDs 115, 116, 117)
+// The Exodia Engine: Combines the Absolved (Unrestricted) powers of every Sin it eats.
+static u32 pentacle_joker_effect(Joker* joker, Card* scored_card, enum JokerEvent joker_event, JokerEffect** joker_effect) {
+    // Form 1 (ID 115) is dormant. It does absolutely nothing until it evolves!
+    if (joker->id == 115) return JOKER_EFFECT_FLAG_NONE;
+
+    u32 flags = JOKER_EFFECT_FLAG_NONE;
+    int added_mult = 0;
+    int added_chips = 0;
+    int total_xmult = 1;
+
+    // --- PHASE 1: SCORING INDIVIDUAL CARDS ---
+    if (joker_event == JOKER_EVENT_ON_CARD_SCORED) {
+        
+        // Absolved Suit Sins: +3 Mult per card, IGNORING what suit it is!
+        if (acquired_sins_mask & (1 << 0)) added_mult += 3; // Greedy
+        if (acquired_sins_mask & (1 << 1)) added_mult += 3; // Lusty
+        if (acquired_sins_mask & (1 << 2)) added_mult += 3; // Wrathful
+        if (acquired_sins_mask & (1 << 3)) added_mult += 3; // Gluttonous
+
+        // Absolved Vainglorious: X2 Mult per face card, IGNORING if numbered cards are in the hand!
+        if ((acquired_sins_mask & (1 << 4)) && card_is_face(scored_card)) {
+            total_xmult *= 2;
+        }
+
+        // Absolved Envy: EVERY card played steals double the power of the highest card!
+        if (acquired_sins_mask & (1 << 6)) {
+            CardObject** played = get_played_array();
+            int played_size = get_played_top() + 1;
+            u8 max_val = 0;
+            for (int i = 0; i < played_size; i++) {
+                if (played[i] && played[i]->card) {
+                    u8 val = card_get_value(played[i]->card);
+                    if (val > max_val) max_val = val;
+                }
+            }
+            int target_value = max_val * 2;
+            int base_val = card_get_value(scored_card);
+            if (target_value > base_val) added_chips += (target_value - base_val);
+        }
+    }
+
+    // --- PHASE 2: INDEPENDENT SCORING ---
+    if (joker_event == JOKER_EVENT_INDEPENDENT) {
+        // Absolved Sloth: X4 Mult globally, IGNORING the 1-card limit!
+        if (acquired_sins_mask & (1 << 5)) total_xmult *= 4;
+
+        // Form 3 (ID 117): The Final Awakening Global X7!
+        if (joker->id == 117) total_xmult *= 7;
+    }
+
+    // --- PHASE 3: ROUND END PAYOUT ---
+    if (joker_event == JOKER_EVENT_ON_ROUND_END) {
+        if (joker->id == 117) {
+            *joker_effect = &modded_shared_joker_effect;
+            (*joker_effect)->money = 777;
+            return JOKER_EFFECT_FLAG_MONEY;
+        }
+    }
+
+    // Accumulate all the Absolved math and send it to the engine!
+    if (added_mult > 0 || added_chips > 0 || total_xmult > 1) {
+        *joker_effect = &modded_shared_joker_effect;
+        (*joker_effect)->mult = added_mult;
+        (*joker_effect)->chips = added_chips;
+        if (total_xmult > 1) (*joker_effect)->xmult = total_xmult;
+        
+        if (added_mult > 0) flags |= JOKER_EFFECT_FLAG_MULT;
+        if (added_chips > 0) flags |= JOKER_EFFECT_FLAG_CHIPS;
+        if (total_xmult > 1) flags |= JOKER_EFFECT_FLAG_XMULT;
+    }
+
+    return flags;
+}
+
 // --- 2. YOUR MODDED REGISTRY ---
 
 // The engine knows to start reading this array at ID 100.
@@ -255,14 +413,20 @@ const JokerInfo modded_joker_registry[] = {
     { RARE_JOKER,            12,     last_dance_joker_effect       }, // Index 1 -> ID 101 (Last Dance)
     { COMMON_JOKER,           4,     voor_joker_effect             }, // Index 2 -> ID 102 (Voor)
     { UNCOMMON_JOKER,         7,     jaker_joker_effect            }, // Index 3 -> ID 103 (Jaker)
-    { RARE_JOKER,            15,     capacocha_joker_effect        }, // Index 4 -> ID 104 (Capacocha)
-    { COMMON_JOKER,           6,     overkill_joker_effect         }, // Index 5 -> ID 105 (Overkill)
-    { RARE_JOKER,             7,     jamming_joker_effect          }, // ID 106 (Jamming) Clanker
-    { RARE_JOKER,             6,     captcha_joker_effect          }, // ID 107 (CaptchA) Clanker
-    { RARE_JOKER,             6,     ddos_joker_effect             }, // ID 108 (DDoS Attack) Clanker
+    { RARE_JOKER,            13,     capacocha_joker_effect        }, // Index 4 -> ID 104 (Capacocha)
+    { COMMON_JOKER,           5,     overkill_joker_effect         }, // Index 5 -> ID 105 (Overkill)
+    { RARE_JOKER,             6,     jamming_joker_effect          }, // ID 106 (Jamming) Clanker
+    { RARE_JOKER,             5,     captcha_joker_effect          }, // ID 107 (CaptchA) Clanker
+    { RARE_JOKER,             5,     ddos_joker_effect             }, // ID 108 (DDoS Attack) Clanker
     { UNCOMMON_JOKER,         7,     trojan_joker_effect           }, // ID 109 (Trojan Joker) Clanker
     { RARE_JOKER,            10,     c_joker_effect                }, // ID 110 (Cyclone Joker)
     { RARE_JOKER,            10,     j_joker_effect                }, // ID 111 (Joker Joker)
+    { RARE_JOKER,            10,     vainglorious_joker_effect     }, // ID 112 (Vainglorious)
+    { COMMON_JOKER,           8,     sloth_joker_effect            }, // ID 113 (Sloth)
+    { UNCOMMON_JOKER,        10,     envious_joker_effect          }, // ID 114 (Envious)
+    { RARE_JOKER,             7,      pentacle_joker_effect        }, // ID 115 (Form 1 - Dormant)
+    { RARE_JOKER,             7,      pentacle_joker_effect        }, // ID 116 (Form 2 - Awakened)
+    { RARE_JOKER,             7,      pentacle_joker_effect        }, // ID 117 (Form 3 - Final)
 };
 
 

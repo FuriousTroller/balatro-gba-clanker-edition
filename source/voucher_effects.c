@@ -43,21 +43,25 @@ void effect_reroll_glut(void)
 }
 
 // --- ONE-TIME STAT BOOSTS ---
-void effect_grabber(void) { 
-    max_hands++; 
-    set_num_hands_remaining(get_num_hands_remaining() + 1); 
+void effect_grabber(void)
+{
+    max_hands++;
+    set_num_hands_remaining(get_num_hands_remaining() + 1);
 }
-void effect_nacho_tong(void) { 
-    max_hands++; 
-    set_num_hands_remaining(get_num_hands_remaining() + 1); 
+void effect_nacho_tong(void)
+{
+    max_hands++;
+    set_num_hands_remaining(get_num_hands_remaining() + 1);
 }
-void effect_wasteful(void) { 
-    max_discards++; 
-    set_num_discards_remaining(get_num_discards_remaining() + 1); 
+void effect_wasteful(void)
+{
+    max_discards++;
+    set_num_discards_remaining(get_num_discards_remaining() + 1);
 }
-void effect_recyclomancy(void) { 
-    max_discards++; 
-    set_num_discards_remaining(get_num_discards_remaining() + 1); 
+void effect_recyclomancy(void)
+{
+    max_discards++;
+    set_num_discards_remaining(get_num_discards_remaining() + 1);
 }
 
 // --- BLANK / DARK MATTER ---
