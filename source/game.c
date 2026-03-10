@@ -4156,7 +4156,7 @@ static inline void game_playing_process_input_and_state(void)
     // ---> 2. REGULAR ENGINE LOGIC <---
     if (hand_state == HAND_SELECT)
     {
-        if (deck_get_size() == 0)
+        if (deck_get_size() == 0 && hand_get_size() == 0)
         {
             hands = 0;
             hand_state = HAND_SHUFFLING;
