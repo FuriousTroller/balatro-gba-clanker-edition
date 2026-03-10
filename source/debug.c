@@ -126,6 +126,8 @@ static const char* const joker_names[] = {
     [57] = "Square",
     [58] = "Smeared",
     [59] = "FlshCard",
+    [60] = "Sharp Card",
+    [61] = "Hit The Road",
 };
 
 /* Modded joker names, indexed by LOCAL modded index (0 = ID 100, 1 = ID 101, ...).

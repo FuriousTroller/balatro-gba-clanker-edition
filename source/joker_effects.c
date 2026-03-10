@@ -12,6 +12,7 @@
 extern int max_jokers;
 extern int total_hands_played[16];
 extern enum HandType* get_hand_type(void); // Bring in the hand type fetcher, Supernova thingy
+extern int hands_played_this_round[16]; // Card Sharp thingy
 
 #define SCORE_ON_EVENT_ONLY_WITH_CARD(scored_card, restricted_event, checked_event) \
     if (checked_event != restricted_event || scored_card == NULL)                   \
@@ -381,6 +382,18 @@ static u32 flash_card_joker_effect(
     enum JokerEvent joker_event, 
     JokerEffect** joker_effect
 );
+static u32 card_sharp_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+);
+static u32 hit_the_road_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+);
 
 // clang-format off
 /* The index of a joker in the registry matches its ID.
@@ -454,6 +467,8 @@ const JokerInfo joker_registry[] =
     { COMMON_JOKER,    4, square_joker_effect               }, // 57
     { UNCOMMON_JOKER,  5, smeared_joker_effect              }, // 58
     { UNCOMMON_JOKER,  4, flash_card_joker_effect           }, // 59
+    { UNCOMMON_JOKER,  6, card_sharp_effect                 }, // 60
+    { RARE_JOKER,      8, hit_the_road_effect               }, // 61
 
     // The following jokers don't have sprites yet,
     // uncomment them when their sprites are added.
@@ -1998,4 +2013,51 @@ static u32 flash_card_joker_effect(
         flags |= JOKER_EFFECT_FLAG_MULT;
     }
     return flags;
+}
+
+static u32 card_sharp_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+) 
+{
+    if (joker_event == JOKER_EVENT_INDEPENDENT) {
+        // Fetch the current hand type safely!
+        enum HandType current_hand = *get_hand_type();
+        
+        // Check our new round-specific memory tracker
+        if (hands_played_this_round[current_hand] > 1) {
+            *joker_effect = &shared_joker_effect;
+            (*joker_effect)->xmult = 3; // X3 Mult
+            return JOKER_EFFECT_FLAG_XMULT; // Added the missing semicolon here!
+        }
+    }
+    return JOKER_EFFECT_FLAG_NONE;
+}
+
+static u32 hit_the_road_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+) 
+{
+    if (joker_event == JOKER_EVENT_INDEPENDENT) {
+        int jacks_tossed = joker->persistent_state;
+        
+        if (jacks_tossed > 0) {
+            *joker_effect = &shared_joker_effect;
+            // GBA Hardware limitation: I buff it to +X1 per Jack!
+            (*joker_effect)->xmult = 1 + jacks_tossed; 
+            return JOKER_EFFECT_FLAG_XMULT; 
+        }
+    }
+    
+    // Wipe the memory clean at the end of the round!
+    if (joker_event == JOKER_EVENT_ON_ROUND_END) {
+        joker->persistent_state = 0; 
+    }
+    
+    return JOKER_EFFECT_FLAG_NONE;
 }

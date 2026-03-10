@@ -638,6 +638,7 @@ static int round = 0;
 static int ante = 0;
 static int money = 0;
 static u32 score = 0;
+int hands_played_this_round[16] = {0}; // An array to track already played hand type for Card Sharp!
 int total_hands_played[16] = {0}; // An array to track each hand type for Supernova!
 int overkill_payout = 0;          // This is overkill payout
 static u32 temp_score = 0;        // This is the score that shows in the same spot as the hand type.
@@ -2247,6 +2248,11 @@ static void game_round_on_init()
     cards_drawn = 0;
     hand_selections = 0;
 
+    // Reset Card Sharp each blind
+    for (int i = 0; i < 16; i++) {
+        hands_played_this_round[i] = 0; 
+    }
+
     // ---> START JAKER & LAST DANCE HOOK <---
     int jaker_bonus = 0;
     ListItr itr = list_itr_create(&_owned_jokers_list);
@@ -2437,6 +2443,31 @@ static void game_playing_execute_discard(void)
         return;
 
     hand_state = HAND_DISCARD;
+
+    // ---> START HIT THE ROAD HOOK <---
+    int jacks_discarded = 0;
+    CardObject** current_hand = get_hand_array();
+    
+    // Scan the cards you are currently holding BEFORE they vanish
+    for (int i = 0; i <= get_hand_top(); i++) {
+        if (current_hand[i] != NULL && card_object_is_selected(current_hand[i])) {
+            if (current_hand[i]->card->rank == JACK) {
+                jacks_discarded++;
+            }
+        }
+    }
+    
+    if (jacks_discarded > 0) {
+        for (int i = 0; i < list_get_len(&_owned_jokers_list); i++) {
+            JokerObject* j_obj = (JokerObject*)list_get_at_idx(&_owned_jokers_list, i);
+            if (j_obj->joker->id == 61) { 
+                j_obj->joker->persistent_state += jacks_discarded;
+                joker_object_shake(j_obj, SFX_CARD_SELECT); // Wiggle so the player knows it worked
+            }
+        }
+    }
+    // ---> END HIT THE ROAD HOOK <---
+
     // ---> START GREEN JOKER DISCARD HOOK <---
     for (int i = 0; i < list_get_len(&_owned_jokers_list); i++)
     {
@@ -2454,6 +2485,7 @@ static void game_playing_execute_discard(void)
         }
     }
     // ---> END GREEN JOKER DISCARD HOOK <---
+
     display_discards(--discards);
     set_hand();
 }
@@ -2522,6 +2554,7 @@ static void game_playing_execute_play_hand(void)
     display_hands(--hands);
 
     total_hands_played[hand_type]++; // Adds +1 to the SPECIFIC hand type played!
+    hands_played_this_round[hand_type]++; // Adds +1 to the Card Sharp hand count!
 }
 
 static int game_playing_hand_row_get_size(void)
