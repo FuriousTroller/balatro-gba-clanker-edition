@@ -2198,6 +2198,14 @@ void process_pentacle_evolution(void) {
         else if (pentacle_id == 116 && sin_count >= 7) {
             new_pentacle_id = 117; 
             did_evolve = true;
+            
+            // 1. Black out the UI panels
+            memset16(&pal_bg_mem[BLIND_BG_PRIMARY_PID], RGB15(2, 2, 2), 1);
+            memset16(&pal_bg_mem[BLIND_BG_SECONDARY_PID], RGB15(5, 5, 5), 1);
+            memset16(&pal_bg_mem[BLIND_BG_SHADOW_PID], RGB15(1, 1, 1), 1);
+            
+            // 2. Black out the swirling geometric background!
+            affine_background_set_color(RGB15(2, 2, 2));
         }
         
         if (did_evolve) {
