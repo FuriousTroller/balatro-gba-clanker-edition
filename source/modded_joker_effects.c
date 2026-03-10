@@ -424,9 +424,9 @@ const JokerInfo modded_joker_registry[] = {
     { RARE_JOKER,            10,     vainglorious_joker_effect     }, // ID 112 (Vainglorious)
     { COMMON_JOKER,           8,     sloth_joker_effect            }, // ID 113 (Sloth)
     { UNCOMMON_JOKER,        10,     envious_joker_effect          }, // ID 114 (Envious)
-    { RARE_JOKER,             7,      pentacle_joker_effect        }, // ID 115 (Form 1 - Dormant)
-    { RARE_JOKER,             7,      pentacle_joker_effect        }, // ID 116 (Form 2 - Awakened)
-    { RARE_JOKER,             7,      pentacle_joker_effect        }, // ID 117 (Form 3 - Final)
+    { RARE_JOKER,             7,     pentacle_joker_effect        }, // ID 115 (Form 1 - Dormant)
+    { RARE_JOKER,             7,     pentacle_joker_effect        }, // ID 116 (Form 2 - Awakened)
+    { RARE_JOKER,             7,     pentacle_joker_effect        }, // ID 117 (Form 3 - Final)
 };
 
 

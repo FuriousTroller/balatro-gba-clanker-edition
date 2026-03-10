@@ -761,6 +761,8 @@ static inline void reset_shop_jokers(void)
             }
         }
         // ---> END CLANKER BANS <---
+        set_shop_joker_avail(116, false); // Ban Form 2 forever
+        set_shop_joker_avail(117, false); // Ban Form 3 forever
     }
 }
 
@@ -2183,29 +2185,48 @@ void process_pentacle_evolution(void) {
     
     // 4. EVOLVE AND DEVOUR!
     bool did_evolve = false;
+    int new_pentacle_id = 0;
+    
     if (pentacle_obj != NULL) {
         
         // Evolve to Form 2 (Red J)
         if (pentacle_id == 115 && sin_count >= 4) {
-            pentacle_obj->joker->id = 116; 
+            new_pentacle_id = 116; 
             did_evolve = true;
         } 
         // Evolve to Final Form (Full Red Pentacle)
         else if (pentacle_id == 116 && sin_count >= 7) {
-            pentacle_obj->joker->id = 117; 
+            new_pentacle_id = 117; 
             did_evolve = true;
         }
         
-        // The Sacrifice: If it evolved, eat the Sins to free up Joker slots!
         if (did_evolve) {
-            // We MUST loop backwards so deleting items doesn't scramble the index!
+            // 1. Spawn a BRAND NEW Pentacle to force the new sprite to render!
+            JokerObject* new_pentacle = joker_object_new(joker_new(new_pentacle_id));
+            
+            // Make it drop in from slightly off-screen
+            new_pentacle->sprite_object->x = int2fx(120); 
+            new_pentacle->sprite_object->y = int2fx(-20);
+            new_pentacle->sprite_object->tx = new_pentacle->sprite_object->x;
+            new_pentacle->sprite_object->ty = int2fx(HELD_JOKERS_POS.y);
+            
+            // Add it to the end of the player's hand
+            add_joker(new_pentacle);
+            
+            // We MUST fetch the array length again because we just added 1 card!
+            num_jokers = list_get_len(jokers);
+
+            // 2. Eradicate the OLD Pentacle AND the Sins!
             for (int i = num_jokers - 1; i >= 0; i--) {
                 JokerObject* jo = list_get_at_idx(jokers, i);
                 int id = jo->joker->id;
-                if (id == 1 || id == 2 || id == 3 || id == 4 || 
-                    id == 112 || id == 113 || id == 114) {
+                
+                // Target the old Pentacle and the Sins (but spare the new Pentacle)
+                if (jo != new_pentacle && (id == pentacle_id || id == 1 || id == 2 || id == 3 || id == 4 || id == 112 || id == 113 || id == 114)) {
                     
+                    erase_price_under_sprite_object(jo->sprite_object);
                     remove_owned_joker(i); 
+                    joker_start_discard_animation(jo);
                 }
             }
         }
