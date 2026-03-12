@@ -51,14 +51,13 @@ static u32 last_dance_joker_effect(
 )
 {
     if (joker_event == JOKER_EVENT_INDEPENDENT) {
-        // Point to our safe local variable
         *joker_effect = &modded_shared_joker_effect;
         
-        // x3 Total Mult
-        (*joker_effect)->xmult = 3; 
+        // A flat, massive X5 Mult
+        (*joker_effect)->xmult = 5; 
         
-        // x2 Total Chips (By adding 100% of our current chips to the pool!)
-        (*joker_effect)->chips = get_chips(); 
+        // Triples the total chips!
+        (*joker_effect)->chips = get_chips() * 2; 
         
         return JOKER_EFFECT_FLAG_XMULT | JOKER_EFFECT_FLAG_CHIPS;
     }

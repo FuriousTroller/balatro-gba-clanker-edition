@@ -3145,14 +3145,21 @@ static inline void game_playing_handle_round_over(void)
         next_state = GAME_STATE_LOSE;
     }
 
-    // 3. OVERKILL JOKER MATH (ID 104)
+    // 3. OVERKILL JOKER MATH (ID 105)
     overkill_payout = 0;
-    if (score >= req * 2)
-        overkill_payout = 10;
-    else if (score >= req + (req / 2))
-        overkill_payout = 7;
-    else if (score >= req + (req / 4))
-        overkill_payout = 4;
+    if (score > req)
+    {
+        u32 quarter_req = req / 4; 
+        
+        // Safety check to prevent dividing by zero if the requirement is somehow under 4
+        if (quarter_req > 0) 
+        {
+            u32 excess_score = score - req;
+            u32 chunks_earned = excess_score / quarter_req; // Counts how many 25% chunks you got
+            
+            overkill_payout = chunks_earned * 4; // $4 for every chunk!
+        }
+    }
 
     // 4. SEQUENTIAL ROUND END HOOK (Handles end-of-round Joker effects before switching states)
     if (next_state == GAME_STATE_ROUND_END || next_state == GAME_STATE_WIN)
