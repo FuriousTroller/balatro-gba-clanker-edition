@@ -333,6 +333,12 @@ bool joker_object_score(
         list_push_back(get_expired_jokers_list(), joker_object);
     }
 
+    if (effect_flags_ret & JOKER_EFFECT_FLAG_XDECIMAL)
+    {
+        mult = u32_protected_add(mult, joker_effect->mult);
+        set_and_shift_text(joker_effect->message, &cursorPosX, &cursorPosY, TTE_RED_PB);
+    }
+
     // Update values
     set_chips(chips);
     set_mult(mult);

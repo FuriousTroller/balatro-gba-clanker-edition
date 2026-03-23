@@ -82,6 +82,7 @@ enum JokerEvent
 #define JOKER_EFFECT_FLAG_RETRIGGER (1 << 4)
 #define JOKER_EFFECT_FLAG_EXPIRE    (1 << 5)
 #define JOKER_EFFECT_FLAG_MESSAGE   (1 << 6)
+#define JOKER_EFFECT_FLAG_XDECIMAL  (1 << 7)
 
 #define MAX_JOKER_OBJECTS 32 // The maximum number of joker objects that can be created at once
 

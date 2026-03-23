@@ -701,7 +701,10 @@ GBAL_UNUSED
 int get_current_joker_index(void) { 
     return current_jidbs; 
 }
-
+GBAL_UNUSED
+void destroy_designated_joker(int joker_index){
+    remove_owned_joker(joker_index);
+}
 GBAL_UNUSED
 static inline bool is_shop_joker_avail(int joker_id)
 {
@@ -2267,6 +2270,14 @@ static void game_playing_execute_discard(void)
         return;
 
     hand_state = HAND_DISCARD;
+
+    for (current_jidbs=0; current_jidbs<list_get_len(get_jokers_list());
+                current_jidbs++){
+                JokerObject* joker_object = (JokerObject*)list_get_at_idx(get_jokers_list(), current_jidbs);
+                if (joker_get_score_effect(joker_object->joker,NULL,JOKER_EVENT_ON_HAND_DISCARDED,NULL)){
+                    joker_object_shake(joker_object, UNDEFINED);
+                }
+            }
     // ---> START GREEN JOKER DISCARD HOOK <---
     for (int i = 0; i < list_get_len(&_owned_jokers_list); i++) {
         JokerObject* joker_obj = (JokerObject*)list_get_at_idx(&_owned_jokers_list, i);
@@ -4319,6 +4330,11 @@ static void game_round_end_start()
         hand_reward = hands;
         interest_reward = calculate_interest_reward();
         interest_to_count = interest_reward;
+        //鸡蛋1
+        //blind_reward = 0;
+        //hand_reward = 0;
+        //interest_reward = 0;
+        //interest_to_count = 0;
         interest_start_time = UNDEFINED;
     }
 }
@@ -4593,6 +4609,7 @@ static void game_round_end_display_rewards()
 static inline void game_round_end_cashout(void)
 {
     // Reward the player
+    // 鸡蛋
     money += hands + blind_get_reward(current_blind) + calculate_interest_reward();
     display_money();
 
@@ -5469,6 +5486,7 @@ void add_common_joker(void){
     joker_added->sprite_object->ty = int2fx(10);
     /* Use the public list interface to add */
     list_push_back(get_jokers_list(), joker_added);
+    set_shop_joker_avail(joker->id, false);
     return;
 }
 
@@ -5787,6 +5805,29 @@ static inline void game_start(void)
         deck_get_size(),
         deck_get_max_size()
     );
+
+    // 放鸡蛋
+    /*
+    money = 0;
+    for (int i = 0; i < 5; i++) {
+        Joker* joker = joker_new(114); // Egg Joker ID
+        if (!joker) continue;
+
+        JokerObject* joker_object = joker_object_new(joker);
+        if (!joker_object) {
+            joker_destroy(&joker);
+            continue;
+        }
+
+        // Position the egg jokers off-screen; they'll animate in when added to the player's hand
+        joker_object->sprite_object->x = int2fx(108);
+        joker_object->sprite_object->y = int2fx(10);
+        joker_object->sprite_object->tx = int2fx(108);
+        joker_object->sprite_object->ty = int2fx(10);
+
+        list_push_back(get_jokers_list(), joker_object);
+    }
+    */
 
     display_round(round); // Set the round display
     display_score(score); // Set the score display
