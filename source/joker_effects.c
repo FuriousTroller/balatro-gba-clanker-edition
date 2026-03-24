@@ -13,6 +13,7 @@ extern int max_jokers;
 extern int total_hands_played[16];
 extern enum HandType* get_hand_type(void); // Bring in the hand type fetcher, Supernova thingy
 extern int hands_played_this_round[16]; // Card Sharp thingy
+extern bool get_held_card_did_trigger(void); // Mime
 
 #define SCORE_ON_EVENT_ONLY_WITH_CARD(scored_card, restricted_event, checked_event) \
     if (checked_event != restricted_event || scored_card == NULL)                   \
@@ -394,7 +395,36 @@ static u32 hit_the_road_effect(
     enum JokerEvent joker_event, 
     JokerEffect** joker_effect
 );
-
+static u32 mime_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+);
+static u32 baron_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+);
+static u32 wee_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+);
+static u32 invisible_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+);
+static u32 runner_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+);
 // clang-format off
 /* The index of a joker in the registry matches its ID.
  * The joker sprites are matched by ID so the position in the registry
@@ -469,7 +499,12 @@ const JokerInfo joker_registry[] =
     { UNCOMMON_JOKER,  4, flash_card_joker_effect           }, // 59
     { UNCOMMON_JOKER,  6, card_sharp_effect                 }, // 60
     { RARE_JOKER,      8, hit_the_road_effect               }, // 61
-
+    { UNCOMMON_JOKER,  5, mime_joker_effect                 }, // 62 Mime
+    { RARE_JOKER,      8, baron_joker_effect                }, // 63
+    { COMMON_JOKER,    5, shoot_the_moon_joker_effect,      }, // 64
+    { RARE_JOKER,      8, wee_joker_effect                  }, // 65
+    { RARE_JOKER,      8, invisible_joker_effect            }, // 66
+    { COMMON_JOKER,    5, runner_joker_effect               }, // 67 Brainrot marker
     // The following jokers don't have sprites yet,
     // uncomment them when their sprites are added.
 #if 0
@@ -2060,4 +2095,204 @@ static u32 hit_the_road_effect(
     }
     
     return JOKER_EFFECT_FLAG_NONE;
+}
+static u32 mime_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+)
+{
+    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
+    s32* p_last_retriggered_index = &(joker->scoring_state); 
+
+    switch (joker_event)
+    {
+        case JOKER_EVENT_ON_HAND_PLAYED:
+            *p_last_retriggered_index = 9999;
+            break;
+
+        case JOKER_EVENT_ON_CARD_HELD_END: // <--- Listens for the restored event!
+            
+            // THE UNIVERSAL CHECK: Did ANY Joker trigger during the HELD phase?
+            if (!get_held_card_did_trigger()) {
+                break; 
+            }
+
+            *joker_effect = &shared_joker_effect;
+            
+            // Dusk Logic: Only retrigger if strictly AFTER the last one we triggered
+            (*joker_effect)->retrigger = (*p_last_retriggered_index > get_scored_card_index());
+            
+            if ((*joker_effect)->retrigger)
+            {
+                *p_last_retriggered_index = get_scored_card_index();
+                
+                // Scrub memory just to be safe
+                (*joker_effect)->chips = 0;
+                (*joker_effect)->mult = 0;
+                
+                (*joker_effect)->message = "Again!"; 
+                effect_flags_ret = JOKER_EFFECT_FLAG_RETRIGGER | JOKER_EFFECT_FLAG_MESSAGE;
+            }                
+            break;
+            
+        default:
+            break;
+    }
+    return effect_flags_ret;
+}
+static u32 baron_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+)
+{
+    if (joker_event == JOKER_EVENT_ON_CARD_HELD && scored_card->rank == KING)
+    {
+        // 1. Do the math behind the scenes
+        u32 current_mult = get_mult();
+        u32 bonus_mult = (current_mult * 50 + 99) / 100;
+        set_mult(current_mult + bonus_mult);
+        
+        *joker_effect = &shared_joker_effect;
+        
+        // 2. Scrub memory to prevent dirty loops
+        (*joker_effect)->retrigger = false; 
+        (*joker_effect)->chips = 0;
+        (*joker_effect)->mult = 0;
+        
+        // 3. Fake the UI perfectly
+        (*joker_effect)->message = "#{cx:0xE000}X1.5";
+        
+        return JOKER_EFFECT_FLAG_MESSAGE;
+    }
+
+    return JOKER_EFFECT_FLAG_NONE;
+}
+static u32 wee_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+)
+{
+    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
+    
+    // The memory slot that remembers the +Chips across rounds!
+    s32* chips_bonus = &(joker->persistent_state); 
+
+    switch (joker_event)
+    {
+        // 1. Set starting Chips to 0 when you buy or obtain it
+        case JOKER_EVENT_ON_JOKER_CREATED:
+            *chips_bonus = 0; 
+            break;
+
+        // 2. Listen for a 2 being scored to scale up!
+        case JOKER_EVENT_ON_CARD_SCORED:
+            if (scored_card != NULL && scored_card->rank == TWO) 
+            {
+                *chips_bonus += 8;
+                
+                *joker_effect = &shared_joker_effect;
+                
+                // Scrub the memory just to be safe from our old bugs
+                (*joker_effect)->chips = 0;
+                (*joker_effect)->mult = 0;
+                (*joker_effect)->retrigger = false;
+
+                (*joker_effect)->message = " "; 
+                effect_flags_ret = JOKER_EFFECT_FLAG_MESSAGE;
+            }
+            break;
+
+        // 3. Apply the accumulated Chips to the total score at the end
+        case JOKER_EVENT_INDEPENDENT:
+            if (*chips_bonus > 0) 
+            {
+                *joker_effect = &shared_joker_effect;
+                (*joker_effect)->chips = *chips_bonus;
+                effect_flags_ret = JOKER_EFFECT_FLAG_CHIPS;
+            }
+            break;
+            
+        default:
+            break;
+    }
+
+    return effect_flags_ret;
+}
+static u32 invisible_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+)
+{
+    u32 flags = JOKER_EFFECT_FLAG_NONE;
+    s32* rounds_passed = &(joker->persistent_state);
+
+    if (joker_event == JOKER_EVENT_ON_JOKER_CREATED) {
+        *rounds_passed = 0;
+    }
+
+    if (joker_event == JOKER_EVENT_ON_ROUND_END) {
+        if (*rounds_passed < 2) {
+            (*rounds_passed)++;
+            
+            // Pop up a message when it fully charges!
+            if (*rounds_passed >= 2) {
+                *joker_effect = &shared_joker_effect;
+                (*joker_effect)->message = "Active!";
+                flags = JOKER_EFFECT_FLAG_MESSAGE;
+            }
+        }
+    }
+    return flags;
+}
+static u32 runner_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+)
+{
+    u32 flags = JOKER_EFFECT_FLAG_NONE;
+    s32* chips_bonus = &(joker->persistent_state);
+
+    switch (joker_event)
+    {
+        case JOKER_EVENT_ON_JOKER_CREATED:
+            *chips_bonus = 0; 
+            break;
+
+        case JOKER_EVENT_ON_HAND_PLAYED:
+            // Check if the engine detected a Straight in the played hand
+            if (get_contained_hands()->STRAIGHT) {
+                *chips_bonus += 15;
+                
+                *joker_effect = &shared_joker_effect;
+                (*joker_effect)->chips = 0;
+                (*joker_effect)->mult = 0;
+                (*joker_effect)->retrigger = false;
+                
+                (*joker_effect)->message = " ";
+                flags = JOKER_EFFECT_FLAG_MESSAGE;
+            }
+            break;
+
+        case JOKER_EVENT_INDEPENDENT:
+            if (*chips_bonus > 0) {
+                *joker_effect = &shared_joker_effect;
+                (*joker_effect)->chips = *chips_bonus;
+                flags = JOKER_EFFECT_FLAG_CHIPS;
+            }
+            break;
+            
+        default:
+            break;
+    }
+    return flags;
 }

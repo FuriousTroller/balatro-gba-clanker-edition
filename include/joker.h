@@ -59,6 +59,7 @@ enum JokerEvent
     JOKER_EVENT_ON_CARD_SCORED_END, // Triggers after the card has finishd scoring (e.g. retrigger
                                     // Jokers)
     JOKER_EVENT_ON_CARD_HELD,       // Triggers when going through held cards
+    JOKER_EVENT_ON_CARD_HELD_END, // Retriggers for Mime
     JOKER_EVENT_INDEPENDENT, // Joker will trigger normally, when Jokers are scored (e.g. base
                              // Joker)
     JOKER_EVENT_ON_HAND_SCORED_END, // Triggers when entire hand has finished scoring (e.g. food

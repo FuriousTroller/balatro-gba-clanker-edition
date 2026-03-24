@@ -308,7 +308,7 @@ static bool game_playing_hand_row_on_selection_changed(
 
 static int game_playing_hand_row_get_size(void);
 
-static bool custom_jokers_enabled = false; // On and off for aditional cards
+static bool custom_jokers_enabled = true; // On and off for aditional cards
 
 static void shop_reroll_row_on_key_transit(SelectionGrid* selection_grid, Selection* selection);
 static bool shop_reroll_row_on_selection_changed(
@@ -660,6 +660,8 @@ static Card* _player_deck_save[MAX_DECK_SIZE];
 static int _player_deck_save_top = -1;
 static u32 chips = 0;
 static u32 mult = 0;
+static bool held_card_did_trigger = false;
+bool get_held_card_did_trigger(void) { return held_card_did_trigger; }
 static bool retrigger = false;
 
 static int hand_size = 8; // Default hand size is 8
@@ -3754,8 +3756,9 @@ static inline bool play_scoring_cards_update(void)
         {
             // reuse these variables for held cards
             _joker_scored_itr = list_itr_create(&_owned_jokers_list);
+            _joker_card_scored_end_itr = list_itr_create(&_owned_jokers_list);
             scored_card_index = hand_top;
-
+            
             play_state = PLAY_SCORING_HELD_CARDS;
 
             return false;
@@ -3861,30 +3864,58 @@ static inline bool play_scoring_card_jokers_update(void)
 // returns true if the scoring loop has returned early
 static inline bool play_scoring_held_cards_update(int played_idx)
 {
-    if (played_idx == 0 && (timer % FRAMES(30) == 0) && timer > FRAMES(40))
+    if (played_idx == 10086)
     {
-        tte_erase_rect_wrapper(HELD_CARDS_SCORES_RECT);
-
-        // Go through all held cards and see if they activate Jokers
-        for (; scored_card_index >= 0; scored_card_index--)
-        {
-            if (check_and_score_joker_for_event(
-                    &_joker_scored_itr,
-                    hand[scored_card_index],
-                    JOKER_EVENT_ON_CARD_HELD
-                ))
-            {
-                card_object_shake(hand[scored_card_index], SFX_CARD_SELECT);
-                return true;
-            }
-            _joker_scored_itr = list_itr_create(&_owned_jokers_list);
-        }
-
+        return false;
+    }
+    if (scored_card_index < 0)
+    {
         scored_card_index = 0;
         _joker_round_end_itr = list_itr_create(&_owned_jokers_list);
         play_state = PLAY_SCORING_INDEPENDENT_JOKERS;
+        return false;
     }
+    if ((timer % FRAMES(30) == 0) && timer > FRAMES(40))
+    {
+        tte_erase_rect_wrapper(HELD_CARDS_SCORES_RECT);
+        if (check_and_score_joker_for_event(
+                    &_joker_scored_itr,
+                    hand[scored_card_index],
+                    JOKER_EVENT_ON_CARD_HELD 
+                ))
+        {
+            held_card_did_trigger = true; // <--- NEW 1: Flag it when a Joker scores!
+            card_object_shake(hand[scored_card_index], SFX_CARD_SELECT);
+            return true;
+        }
+        
+        if (check_and_score_joker_for_event(
+                &_joker_card_scored_end_itr,
+                hand[scored_card_index],
+                JOKER_EVENT_ON_CARD_HELD_END
+            ))
+        {
+            if (retrigger)
+            {                
+                _joker_scored_itr = list_itr_create(&_owned_jokers_list);
+                _joker_card_scored_end_itr = list_itr_create(&_owned_jokers_list);
+                retrigger = false;
+                held_card_did_trigger = false; // <--- NEW 2: Clear it before retriggering the same card!
+                CardObject* scored_card_object = hand[scored_card_index];
+                card_object_shake(scored_card_object, SFX_CHIPS_CARD);
+                play_state = PLAY_SCORING_HELD_CARDS;
+            }
+            
+            return true;
+        }
 
+        // Go through all held cards and see if they activate Jokers
+        held_card_did_trigger = false; // <--- NEW 3: Clear it when moving to the next card!
+        scored_card_index--;
+        _joker_scored_itr = list_itr_create(&_owned_jokers_list);
+        _joker_card_scored_end_itr = list_itr_create(&_owned_jokers_list);
+        play_state = PLAY_SCORING_HELD_CARDS;
+    }
     return false;
 }
 
@@ -5215,6 +5246,44 @@ static inline void game_sell_joker(int joker_idx)
 
     JokerObject* joker_object = (JokerObject*)list_get_at_idx(&_owned_jokers_list, joker_idx);
     int sell_value = joker_get_sell_value(joker_object->joker);
+
+    // ---> START INVISIBLE JOKER HOOK <---
+    if (joker_object->joker->id == 118 && joker_object->joker->persistent_state >= 2) 
+    {
+        int num_jokers = list_get_len(&_owned_jokers_list);
+        
+        if (num_jokers > 1) 
+        {
+            // 1. Gather the actual Joker Objects, not just IDs!
+            JokerObject* valid_jokers[16];
+            int valid_count = 0;
+            
+            for (int i = 0; i < num_jokers; i++) {
+                if (i != joker_idx) { 
+                    valid_jokers[valid_count++] = list_get_at_idx(&_owned_jokers_list, i);
+                }
+            }
+            
+            if (valid_count > 0) {
+                // 2. Pick a random Joker object from the table
+                JokerObject* target_joker = valid_jokers[random() % valid_count];
+                
+                // 3. Create a factory-new clone
+                JokerObject* dupe_joker = joker_object_new(joker_new(target_joker->joker->id));
+                
+                // 4. COPY THE MEMORY STATS! (This keeps all accumulated Chips/Mult/Tracking)
+                dupe_joker->joker->persistent_state = target_joker->joker->persistent_state;
+                dupe_joker->joker->scoring_state = target_joker->joker->scoring_state;
+                
+                // 5. Drop it in from the top
+                dupe_joker->sprite_object->tx = int2fx(120); 
+                dupe_joker->sprite_object->ty = int2fx(HELD_JOKERS_POS.y);
+                
+                add_joker(dupe_joker);
+            }
+        }
+    }
+    // ---> END INVISIBLE JOKER HOOK <---
 
     // ---> START VOOR JOKER HOOK <---
     bool voorhees_intercepted = false;
