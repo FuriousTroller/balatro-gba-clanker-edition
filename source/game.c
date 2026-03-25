@@ -597,16 +597,18 @@ static int interest_to_count = 0;
 static int interest_start_time = UNDEFINED;
 
 // Red deck default (can later be moved to a deck.h file or something)
-static int max_hands = 4;
-static int max_discards = 4;
 // Set in game_init and game_round_init
-static int hands = 0;
-static int discards = 0;
+int hands = 0;
+int discards = 0;
+int curr_round = 0;
+int ante = 0;
+int money = 0;
+u32 score = 0;
 
-static int round = 0;
-static int ante = 0;
-static int money = 0;
-static u32 score = 0;
+int max_hands = 4;
+int max_discards = 4;
+int max_jokers = 5;
+
 static u32 temp_score = 0; // This is the score that shows in the same spot as the hand type.
 static bool score_flames_active = false;
 static FIXED lerped_score = 0;
@@ -1836,7 +1838,7 @@ static void display_round(int value)
         ROUND_TEXT_RECT.left,
         ROUND_TEXT_RECT.top,
         TTE_YELLOW_PB,
-        round
+        value
     );
 }
 
@@ -1934,6 +1936,21 @@ static inline void deck_shuffle(void)
 static void game_round_on_init()
 {
     hand_state = HAND_DRAW;
+
+    hands = max_hands; 
+    discards = max_discards;
+
+    display_hands(hands); //
+    display_discards(discards); //
+    
+    voucher_init(); 
+    roll_new_shop_voucher();
+
+    display_hands(hands);
+    display_discards(discards);
+    
+    display_round(curr_round);
+
     cards_drawn = 0;
     hand_selections = 0;
 
@@ -4799,7 +4816,7 @@ static void game_blind_select_handle_input()
             play_sfx(SFX_BUTTON, MM_BASE_PITCH_RATE, BUTTON_SFX_VOLUME);
             state_info[game_state].substate = BLIND_SELECTED_ANIM_SEQ;
             timer = TM_ZERO;
-            display_round(++round);
+            display_round(++curr_round);
         }
         else if (current_blind != BLIND_TYPE_BOSS)
         {
@@ -4962,7 +4979,7 @@ static inline void game_start(void)
         deck_get_max_size()
     );
 
-    display_round(round); // Set the round display
+    display_round(curr_round); // Set the round display
     display_score(score); // Set the score display
 
     display_chips(); // Set the chips display
@@ -5100,7 +5117,7 @@ static void game_over_on_exit()
 
     game_init();
 
-    display_round(round);
+    display_round(curr_round);
     display_score(score);
     display_chips();
     display_mult();
@@ -5161,5 +5178,5 @@ void game_refresh_hud(void)
     display_hands(hands);
     display_discards(discards);
     display_ante(ante);
-    display_round(round);
+    display_round(curr_round);
 }
