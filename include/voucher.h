@@ -9,6 +9,7 @@
 typedef struct
 {
     u8 id;
+    const char* name;
     u8 upgraded_id;
     int cost;
     void (*on_buy_func)(void);

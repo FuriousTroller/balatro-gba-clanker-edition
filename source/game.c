@@ -690,7 +690,7 @@ static List _discarded_jokers_list;
 static List _expired_jokers_list;
 
 BITSET_DEFINE(_avail_jokers_bitset, MAX_DEFINABLE_JOKERS)
-static List _shop_jokers_list;
+List _shop_jokers_list;
 
 // Stacks
 static CardObject* played[MAX_SELECTION_SIZE] = {NULL};
