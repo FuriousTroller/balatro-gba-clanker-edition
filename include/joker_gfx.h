@@ -36,6 +36,7 @@
 #include "joker_gfx31.h"
 #include "joker_gfx32.h"
 #include "joker_gfx33.h"
+#include "joker_gfx34.h"
 
 #endif
 // clang-format on

@@ -425,6 +425,18 @@ static u32 runner_joker_effect(
     enum JokerEvent joker_event,
     JokerEffect** joker_effect
 );
+static u32 burglar_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+);
+static u32 swashbuckler_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+);
 // clang-format off
 /* The index of a joker in the registry matches its ID.
  * The joker sprites are matched by ID so the position in the registry
@@ -505,6 +517,8 @@ const JokerInfo joker_registry[] =
     { RARE_JOKER,      8, wee_joker_effect                  }, // 65
     { RARE_JOKER,      8, invisible_joker_effect            }, // 66
     { COMMON_JOKER,    5, runner_joker_effect               }, // 67 Brainrot marker
+    { UNCOMMON_JOKER,  6, burglar_joker_effect              },
+    { COMMON_JOKER,    4, swashbuckler_joker_effect         },
     // The following jokers don't have sprites yet,
     // uncomment them when their sprites are added.
 #if 0
@@ -2295,4 +2309,49 @@ static u32 runner_joker_effect(
             break;
     }
     return flags;
+}
+static u32 burglar_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+)
+{
+    // Burglar's core logic (+3 Hands, 0 Discards) is natively handled 
+    // inside the game_round_on_init() positional loop in game.c!
+    
+    // This function acts as a clean placeholder for the registry 
+    // and can be used later if you want to add specific animations.
+    
+    return JOKER_EFFECT_FLAG_NONE;
+}
+static u32 swashbuckler_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+)
+{
+    if (joker_event == JOKER_EVENT_INDEPENDENT)
+    {
+        List* jokers = get_jokers_list();
+        int num_jokers = list_get_len(jokers);
+        int total_sell_value = 0;
+
+        // Loop through all currently owned Jokers
+        for (int i = 0; i < num_jokers; i++) 
+        {
+            JokerObject* j_obj = list_get_at_idx(jokers, i);
+            total_sell_value += joker_get_sell_value(j_obj->joker);
+        }
+
+        if (total_sell_value > 0) 
+        {
+            *joker_effect = &shared_joker_effect;
+            (*joker_effect)->mult = total_sell_value;
+            return JOKER_EFFECT_FLAG_MULT;
+        }
+    }
+    
+    return JOKER_EFFECT_FLAG_NONE;
 }

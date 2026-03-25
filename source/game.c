@@ -766,6 +766,18 @@ static inline void reset_shop_jokers(void)
         // ---> END CLANKER BANS <---
         set_shop_joker_avail(116, false); // Ban Form 2 forever
         set_shop_joker_avail(117, false); // Ban Form 3 forever
+
+        // Check historical Sins to see if Form 1 is allowed to exist in this shop
+        int sin_count = 0;
+        for (int i = 0; i < 7; i++) {
+            if (acquired_sins_mask & (1 << i)) sin_count++;
+        }
+        
+        if (sin_count >= 3) {
+            set_shop_joker_avail(115, true);  // Unlocked!
+        } else {
+            set_shop_joker_avail(115, false); // Keep it locked!
+        }
     }
 }
 
@@ -2255,45 +2267,43 @@ static void game_round_on_init()
         hands_played_this_round[i] = 0; 
     }
 
-    // ---> START JAKER & LAST DANCE HOOK <---
-    int jaker_bonus = 0;
+    // ---> START ROUND-START JOKER HOOK (Positional Priority) <---
     ListItr itr = list_itr_create(&_owned_jokers_list);
     JokerObject* j_obj;
     int idx = 0;
     int total_jokers = list_get_len(&_owned_jokers_list);
 
-    // 1. Calculate Jaker
+    // The engine naturally evaluates this from left to right!
     while ((j_obj = list_itr_next(&itr)))
     {
-        if (j_obj->joker->id == 103)
-        { // Is it Jaker?
-            if (idx < total_jokers - 1)
-            {
-                jaker_bonus += 1; // Blocked by a card on the right!
-            }
-            else
-            {
-                jaker_bonus += (max_jokers - total_jokers); // Rightmost card gets full slots!
-            }
-        }
-        idx++;
-    }
-    hands += jaker_bonus;
+        int id = j_obj->joker->id;
 
-    // 2. Calculate Last Dance (It can steal Jaker's bonus hands too!)
-    if (is_joker_owned(101))
-    {
-        if (hands > 1)
+        if (id == 103) // Jaker
         {
-            int stolen_hands = hands - 1;
-            hands = 1;
-            discards += stolen_hands;
+            if (idx < total_jokers - 1) hands += 1;
+            else hands += (max_jokers - total_jokers);
         }
+        else if (id == 101) // Last Dance
+        {
+            if (hands > 1)
+            {
+                int stolen_hands = hands - 1;
+                hands = 1;
+                discards += stolen_hands;
+            }
+        }
+        else if (id == 119) // Burglar
+        {
+            hands += 3;
+            discards = 0;
+        }
+
+        idx++;
     }
 
     display_hands(hands);
     display_discards(discards);
-    // ---> END HOOK <---
+    // ---> END ROUND-START JOKER HOOK <---
 
     // THE EXODIA TRIGGER: Eat the Sins right as the round starts!
     process_pentacle_evolution();
@@ -3878,6 +3888,7 @@ static inline bool play_scoring_held_cards_update(int played_idx)
     if ((timer % FRAMES(30) == 0) && timer > FRAMES(40))
     {
         tte_erase_rect_wrapper(HELD_CARDS_SCORES_RECT);
+        tte_erase_rect_wrapper(PLAYED_CARDS_SCORES_RECT);
         if (check_and_score_joker_for_event(
                     &_joker_scored_itr,
                     hand[scored_card_index],
@@ -5141,6 +5152,16 @@ static void game_shop_intro()
         if (get_current_shop_voucher_object() != NULL)
         {
             VoucherObject* v = get_current_shop_voucher_object();
+            // Snap the X coordinate to its target, and hide the Y coordinate off-screen!
+            v->sprite_object->x = v->sprite_object->tx;
+            v->sprite_object->y = int2fx(160); 
+            
+            // Force the GBA hardware to apply the coordinates instantly
+            sprite_position(
+                v->sprite_object->sprite, 
+                fx2int(v->sprite_object->x), 
+                fx2int(v->sprite_object->y)
+            );
             print_price_under_sprite_object(v->sprite_object, v->info->cost);
         }
     }
@@ -5247,8 +5268,37 @@ static inline void game_sell_joker(int joker_idx)
     JokerObject* joker_object = (JokerObject*)list_get_at_idx(&_owned_jokers_list, joker_idx);
     int sell_value = joker_get_sell_value(joker_object->joker);
 
+    // ---> START VOOR JOKER HOOK <---
+    bool voorhees_intercepted = false;
+
+    // Don't intercept if we are selling Voor Joker himself!
+    if (joker_object->joker->id != 102)
+    {
+        ListItr itr = list_itr_create(&_owned_jokers_list);
+        JokerObject* v_joker;
+        while ((v_joker = list_itr_next(&itr)))
+        {
+            if (v_joker->joker->id == 102)
+            {
+                // Feed the sell value to Voor Joker's Mult!
+                v_joker->joker->persistent_state += sell_value;
+                voorhees_intercepted = true;
+
+                // Optional: Make Voor Joker wiggle so you know he ate the money!
+                joker_object_shake(v_joker, UNDEFINED);
+            }
+        }
+    }
+
+    if (!voorhees_intercepted)
+    {
+        money += sell_value; // Only gain money if Voor Joker didn't eat it!
+        display_money();
+    }
+    // ---> END VOOR JOKER HOOK <---
+
     // ---> START INVISIBLE JOKER HOOK <---
-    if (joker_object->joker->id == 118 && joker_object->joker->persistent_state >= 2) 
+    if (joker_object->joker->id == 66 && joker_object->joker->persistent_state >= 2) 
     {
         int num_jokers = list_get_len(&_owned_jokers_list);
         
@@ -5284,35 +5334,6 @@ static inline void game_sell_joker(int joker_idx)
         }
     }
     // ---> END INVISIBLE JOKER HOOK <---
-
-    // ---> START VOOR JOKER HOOK <---
-    bool voorhees_intercepted = false;
-
-    // Don't intercept if we are selling Voor Joker himself!
-    if (joker_object->joker->id != 102)
-    {
-        ListItr itr = list_itr_create(&_owned_jokers_list);
-        JokerObject* v_joker;
-        while ((v_joker = list_itr_next(&itr)))
-        {
-            if (v_joker->joker->id == 102)
-            {
-                // Feed the sell value to Voor Joker's Mult!
-                v_joker->joker->persistent_state += sell_value;
-                voorhees_intercepted = true;
-
-                // Optional: Make Voor Joker wiggle so you know he ate the money!
-                joker_object_shake(v_joker, UNDEFINED);
-            }
-        }
-    }
-
-    if (!voorhees_intercepted)
-    {
-        money += sell_value; // Only gain money if Voor Joker didn't eat it!
-        display_money();
-    }
-    // ---> END VOOR JOKER HOOK <---
 
     erase_price_under_sprite_object(joker_object->sprite_object);
     remove_owned_joker(joker_idx);

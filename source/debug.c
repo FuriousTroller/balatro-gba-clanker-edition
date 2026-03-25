@@ -134,6 +134,8 @@ static const char* const joker_names[] = {
     [65] = "Wee",
     [66] = "Invisible",
     [67] = "Runner",
+    [68] = "Burglar",
+    [69] = "Swashbuckler",
 };
 
 /* Modded joker names, indexed by LOCAL modded index (0 = ID 100, 1 = ID 101, ...).
@@ -155,8 +157,8 @@ static const char* const debug_modded_joker_names[] = {
     [13] = "Sloth",          // ID 113
     [14] = "Envy",           // ID 114
     [15] = "Pentacle 1",     // ID 115
-    [16] = "Pentacle 2",     // ID 116
-    [17] = "Pentacle 3",     // ID 117
+    // [16] = "Pentacle 2",     // ID 116
+    // [17] = "Pentacle 3",     // ID 117
 
     /* [4] = "YourNext",  // ID xxx – add your next modded joker here */
 };
