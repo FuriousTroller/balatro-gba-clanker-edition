@@ -1,5 +1,8 @@
 #include "joker.h"
 #include "game.h"
+#include "list.h"
+#include "util.h"
+#include <stdlib.h>
 #include <stddef.h>
 
 #include "custom_joker_sheet_0.h"
@@ -400,7 +403,160 @@ static u32 pentacle_joker_effect(Joker* joker, Card* scored_card, enum JokerEven
 
     return flags;
 }
+static u32 doppelganger_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+)
+{
+    // Hook into the exact moment the hand is played, before scoring begins
+    if (joker_event == JOKER_EVENT_ON_HAND_PLAYED)
+    {
+        enum HandType* current_hand = get_hand_type();
+        bool upgraded = false;
 
+        // Overwrite the engine's memory with the promoted hand type!
+        if (*current_hand == HIGH_CARD) { 
+            *current_hand = PAIR; 
+            upgraded = true; 
+        }
+        else if (*current_hand == PAIR) { 
+            *current_hand = THREE_OF_A_KIND; 
+            upgraded = true; 
+        }
+        else if (*current_hand == TWO_PAIR) { 
+            *current_hand = FULL_HOUSE; 
+            upgraded = true; 
+        }
+        else if (*current_hand == THREE_OF_A_KIND) { 
+            *current_hand = FOUR_OF_A_KIND; 
+            upgraded = true; 
+        }
+        else if (*current_hand == FOUR_OF_A_KIND) { 
+            *current_hand = FIVE_OF_A_KIND; 
+            upgraded = true; 
+        }
+
+        // Pop up text to tell the player the hand was magically upgraded
+        if (upgraded) {
+            *joker_effect = &shared_joker_effect;
+            (*joker_effect)->chips = 0;
+            (*joker_effect)->mult = 0;
+            (*joker_effect)->retrigger = false;
+            
+            (*joker_effect)->message = "Promoted!";
+            return JOKER_EFFECT_FLAG_MESSAGE;
+        }
+    }
+    
+    return JOKER_EFFECT_FLAG_NONE;
+}
+static u32 jonald_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+)
+{
+    // Hook into the Independent phase so it naturally evaluates left-to-right!
+    if (joker_event == JOKER_EVENT_INDEPENDENT)
+    {
+        List* jokers = get_jokers_list();
+        int left_jokers = 0;
+        
+        // 1. Find Jonald's position to count how many Jokers are to the left
+        for (int i = 0; i < list_get_len(jokers); i++) {
+            JokerObject* j_obj = list_get_at_idx(jokers, i);
+            if (j_obj->joker == joker) {
+                left_jokers = i; 
+                break;
+            }
+        }
+
+        // 2. Cap the scaling at 4 Jokers left (Max $8 deduction)
+        if (left_jokers > 4) {
+            left_jokers = 4;
+        }
+
+        // 3. Do the Math behind the scenes
+        u32 current_chips = get_chips();
+        current_chips += 20; // The humble passive +20 Chips
+
+        int multiplier = 1;
+        int current_money = get_money(); // ---> FIX: Grab the wallet safely
+        
+        for (int i = 0; i < left_jokers; i++) {
+            if (current_money >= 2) { 
+                current_money -= 2;
+                multiplier *= 2; 
+            }
+        }
+
+        // 4. Apply the final calculated chips and update the UI
+        set_chips(current_chips * multiplier);
+        set_money(current_money); // ---> FIX: Update the wallet safely
+        display_money(); 
+        
+        // 5. Fake the UI text so the player knows it activated
+        *joker_effect = &shared_joker_effect;
+        (*joker_effect)->chips = 0;
+        (*joker_effect)->mult = 0;
+        (*joker_effect)->retrigger = false;
+        
+        if (multiplier > 1) {
+            (*joker_effect)->message = "Taxed!";
+        } else {
+            (*joker_effect)->message = "+20";
+        }
+        
+        return JOKER_EFFECT_FLAG_MESSAGE;
+    }
+    
+    return JOKER_EFFECT_FLAG_NONE;
+}
+static u32 service_ace_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+)
+{
+    // Check during the scoring phase so the text pops up over the Ace!
+    if (joker_event == JOKER_EVENT_ON_CARD_SCORED) 
+    {
+        // 1. Was exactly ONE card played, and is it an ACE?
+        if (get_played_top() == 0 && scored_card->rank == ACE) 
+        {
+            *joker_effect = &shared_joker_effect;
+            
+            // 2. Add the extra hand (this natively updates the UI!)
+            set_num_hands_remaining(get_num_hands_remaining() + 1);
+            
+            // 3. Roll the dice for the payout (10% chance for $10, 90% for $1)
+            if (random() % 100 < 10) {
+                (*joker_effect)->money = 10;
+            } else {
+                (*joker_effect)->money = 1;
+            }
+            
+            // 4. Returning the MONEY flag forces the engine to handle the +$ text and sound!
+            return JOKER_EFFECT_FLAG_MONEY;
+        }
+    }
+    return JOKER_EFFECT_FLAG_NONE;
+}
+static u32 prosopagnosia_joker_effect(
+    Joker* joker,
+    Card* scored_card,
+    enum JokerEvent joker_event,
+    JokerEffect** joker_effect
+)
+{
+    // Prosopagnosia is a passive rule-bender! 
+    // The actual math is handled inside the numbered Jokers themselves.
+    return JOKER_EFFECT_FLAG_NONE;
+}
 // --- 2. YOUR MODDED REGISTRY ---
 
 // The engine knows to start reading this array at ID 100.
@@ -408,24 +564,28 @@ static u32 pentacle_joker_effect(Joker* joker, Card* scored_card, enum JokerEven
 // Because we set NUM_JOKERS_PER_SPRITESHEET to 2, 
 // Mobius reads the Left half, Last Dance reads the Right half!
 const JokerInfo modded_joker_registry[] = {
-    { UNCOMMON_JOKER,         5,     recursion_joker_effect        }, // Index 0 -> ID 100 (Recursion)
+    { UNCOMMON_JOKER,         4,     recursion_joker_effect        }, // Index 0 -> ID 100 (Recursion)
     { RARE_JOKER,            12,     last_dance_joker_effect       }, // Index 1 -> ID 101 (Last Dance)
     { COMMON_JOKER,           4,     voor_joker_effect             }, // Index 2 -> ID 102 (Voor)
     { UNCOMMON_JOKER,         7,     jaker_joker_effect            }, // Index 3 -> ID 103 (Jaker)
-    { RARE_JOKER,            13,     capacocha_joker_effect        }, // Index 4 -> ID 104 (Capacocha)
+    { RARE_JOKER,            10,     capacocha_joker_effect        }, // Index 4 -> ID 104 (Capacocha)
     { COMMON_JOKER,           5,     overkill_joker_effect         }, // Index 5 -> ID 105 (Overkill)
-    { RARE_JOKER,             6,     jamming_joker_effect          }, // ID 106 (Jamming) Clanker
-    { RARE_JOKER,             5,     captcha_joker_effect          }, // ID 107 (CaptchA) Clanker
-    { RARE_JOKER,             5,     ddos_joker_effect             }, // ID 108 (DDoS Attack) Clanker
-    { UNCOMMON_JOKER,         7,     trojan_joker_effect           }, // ID 109 (Trojan Joker) Clanker
-    { RARE_JOKER,            10,     c_joker_effect                }, // ID 110 (Cyclone Joker)
-    { RARE_JOKER,            10,     j_joker_effect                }, // ID 111 (Joker Joker)
-    { RARE_JOKER,            10,     vainglorious_joker_effect     }, // ID 112 (Vainglorious)
-    { UNCOMMON_JOKER,         8,     sloth_joker_effect            }, // ID 113 (Sloth)
+    { RARE_JOKER,             5,     jamming_joker_effect          }, // ID 106 (Jamming) Clanker
+    { RARE_JOKER,             4,     captcha_joker_effect          }, // ID 107 (CaptchA) Clanker
+    { RARE_JOKER,             4,     ddos_joker_effect             }, // ID 108 (DDoS Attack) Clanker
+    { UNCOMMON_JOKER,         6,     trojan_joker_effect           }, // ID 109 (Trojan Joker) Clanker
+    { COMMON_JOKER,           8,     c_joker_effect                }, // ID 110 (Cyclone Joker)
+    { COMMON_JOKER,           8,     j_joker_effect                }, // ID 111 (Joker Joker)
+    { UNCOMMON_JOKER,         9,     vainglorious_joker_effect     }, // ID 112 (Vainglorious)
+    { UNCOMMON_JOKER,         7,     sloth_joker_effect            }, // ID 113 (Sloth)
     { COMMON_JOKER,           5,     envious_joker_effect          }, // ID 114 (Envious)
     { RARE_JOKER,             7,     pentacle_joker_effect         }, // ID 115 (Form 1 - Dormant)
     { RARE_JOKER,             7,     pentacle_joker_effect         }, // ID 116 (Form 2 - Awakened)
     { RARE_JOKER,             7,     pentacle_joker_effect         }, // ID 117 (Form 3 - Final)
+    { UNCOMMON_JOKER,         5,     doppelganger_joker_effect     }, // ID 118 (Jokkelganger)
+    { UNCOMMON_JOKER,         5,     jonald_joker_effect           }, // ID 119 (McJonald)
+    { UNCOMMON_JOKER,         8,     service_ace_joker_effect      }, // ID 120 (Service Ace)
+    { UNCOMMON_JOKER,         6,     prosopagnosia_joker_effect    }, // ID 121 (Prosopagnosia)
 };
 
 

@@ -28,6 +28,43 @@ extern bool get_held_card_did_trigger(void); // Mime
 
 static JokerEffect shared_joker_effect = {0};
 
+// ---> START PROSOPAGNOSIA HELPERS <---
+
+// Safe ownership check that doesn't break the engine's main scoring loop!
+static bool is_proso_active(void) {
+    List* jokers = get_jokers_list();
+    int num_jokers = list_get_len(jokers);
+    for (int i = 0; i < num_jokers; i++) {
+        JokerObject* j_obj = list_get_at_idx(jokers, i);
+        if (j_obj->joker->id == 121) return true;
+    }
+    return false;
+}
+
+static bool card_matches_rank(Card* card, int target_rank) 
+{
+    if (card->rank == target_rank) return true;
+    
+    // Uses the safe check instead of is_joker_owned()
+    if (is_proso_active() && card_is_face(card)) {
+        if (target_rank >= TWO && target_rank <= TEN) return true;
+    }
+    return false;
+}
+
+static bool card_is_odd(Card* card) 
+{
+    if (is_proso_active() && card_is_face(card)) return true;
+    return (card_get_value(card) % 2 == 1);
+}
+
+static bool card_is_even(Card* card) 
+{
+    if (is_proso_active() && card_is_face(card)) return true;
+    return (card_get_value(card) % 2 == 0) && !card_is_face(card);
+}
+// ---> END PROSOPAGNOSIA HELPERS <---
+
 // Joker Effect functions
 static u32 joker_effect_noop(
     Joker* joker,
@@ -155,7 +192,7 @@ static u32 walkie_talkie_joker_effect(
     enum JokerEvent joker_event,
     JokerEffect** joker_effect
 );
-static u32 fibonnaci_joker_effect(
+static u32 fibonacci_joker_effect(
     Joker* joker,
     Card* scored_card,
     enum JokerEvent joker_event,
@@ -499,7 +536,7 @@ const JokerInfo joker_registry[] =
     { COMMON_JOKER,    4, hanging_chad_joker_effect         }, // 47
     { UNCOMMON_JOKER,  7, joker_effect_noop,                }, // 48 Four Fingers
     { COMMON_JOKER,    4, scholar_joker_effect              }, // 49
-    { UNCOMMON_JOKER,  8, fibonnaci_joker_effect            }, // 50
+    { UNCOMMON_JOKER,  8, fibonacci_joker_effect            }, // 50
     { UNCOMMON_JOKER,  6, seltzer_joker_effect,             }, // 51
     { COMMON_JOKER,    6, golden_joker_effect               }, // 52
     { COMMON_JOKER,    5, gros_michel_joker_effect          }, // 53
@@ -963,7 +1000,7 @@ static u32 walkie_talkie_joker_effect(
 
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
 
-    if (scored_card->rank == TEN || scored_card->rank == FOUR)
+    if (card_matches_rank(scored_card, TEN) || card_matches_rank(scored_card, FOUR))
     {
         *joker_effect = &shared_joker_effect;
 
@@ -975,7 +1012,7 @@ static u32 walkie_talkie_joker_effect(
     return effect_flags_ret;
 }
 
-static u32 fibonnaci_joker_effect(
+static u32 fibonacci_joker_effect(
     Joker* joker,
     Card* scored_card,
     enum JokerEvent joker_event,
@@ -986,19 +1023,13 @@ static u32 fibonnaci_joker_effect(
 
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
 
-    switch (scored_card->rank)
+    if (card_matches_rank(scored_card, ACE) || card_matches_rank(scored_card, TWO) || 
+        card_matches_rank(scored_card, THREE) || card_matches_rank(scored_card, FIVE) || 
+        card_matches_rank(scored_card, EIGHT))
     {
-        case ACE:
-        case TWO:
-        case THREE:
-        case FIVE:
-        case EIGHT:
-            *joker_effect = &shared_joker_effect;
-            (*joker_effect)->mult = 8;
-            effect_flags_ret = JOKER_EFFECT_FLAG_MULT;
-            break;
-        default:
-            break;
+        *joker_effect = &shared_joker_effect;
+        (*joker_effect)->mult = 8;
+        effect_flags_ret = JOKER_EFFECT_FLAG_MULT;
     }
 
     return effect_flags_ret;
@@ -1321,7 +1352,7 @@ static u32 even_steven_joker_effect(
         case JACK:
             break;
         default:
-            if (card_get_value(scored_card) % 2 == 0)
+            if (card_is_even(scored_card)) 
             {
                 *joker_effect = &shared_joker_effect;
 
@@ -1345,7 +1376,7 @@ static u32 odd_todd_joker_effect(
 
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
 
-    if (card_get_value(scored_card) % 2 == 1) // todo test ace
+    if (card_is_odd(scored_card)) 
     {
         *joker_effect = &shared_joker_effect;
 
@@ -1765,12 +1796,9 @@ static u32 hack_joker_effect(
 
         case JOKER_EVENT_ON_CARD_SCORED_END:
             // Works the same way as Dusk, but check what rank the card is
-            switch (scored_card->rank)
+            if (card_matches_rank(scored_card, TWO) || card_matches_rank(scored_card, THREE) || 
+                card_matches_rank(scored_card, FOUR) || card_matches_rank(scored_card, FIVE))
             {
-                case TWO:
-                case THREE:
-                case FOUR:
-                case FIVE:
                     *joker_effect = &shared_joker_effect;
 
                     (*joker_effect)->retrigger =
@@ -2206,7 +2234,7 @@ static u32 wee_joker_effect(
 
         // 2. Listen for a 2 being scored to scale up!
         case JOKER_EVENT_ON_CARD_SCORED:
-            if (scored_card != NULL && scored_card->rank == TWO) 
+            if (scored_card != NULL && card_matches_rank(scored_card, TWO)) 
             {
                 *chips_bonus += 8;
                 

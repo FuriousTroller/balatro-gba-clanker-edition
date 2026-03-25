@@ -157,8 +157,12 @@ static const char* const debug_modded_joker_names[] = {
     [13] = "Sloth",          // ID 113
     [14] = "Envy",           // ID 114
     [15] = "Pentacle 1",     // ID 115
-    // [16] = "Pentacle 2",     // ID 116
-    // [17] = "Pentacle 3",     // ID 117
+    [16] = "Pentacle 2",     // ID 116
+    [17] = "Pentacle 3",     // ID 117
+    [18] = "Jokkelganger",   // ID 118
+    [19] = "Jonald",         // ID 119
+    [20] = "Service Ace",    // ID 120
+    [21] = "Prosopagnosia",  // ID 121 
 
     /* [4] = "YourNext",  // ID xxx – add your next modded joker here */
 };
