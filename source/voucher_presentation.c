@@ -5,7 +5,7 @@
 #include "graphic_utils.h"
 #include <tonc.h>
 #include <maxmod.h>
-#include <string.h> // Needed to dynamically center the text!
+#include <string.h>
 
 extern void sprite_draw(void);
 extern void affine_background_update(void); 
@@ -13,7 +13,11 @@ extern List _shop_jokers_list;
 extern const Rect POP_MENU_ANIM_RECT;
 void game_force_shop_background_redraw(void);
 
-const int SPRITE_CENTER_X = 112; 
+// Link directly to the pristine Shop Map in the ROM!
+extern const u16 background_shop_gfxMap[1024];
+
+const int SPRITE_CENTER_X = 140; 
+const int TEXT_CENTER_X = 156;
 const int CENTER_VOUCHER_Y = 80;
 const int TEXT_NAME_Y = 65; 
 const int TEXT_REDEEMED_Y = 115; 
@@ -23,13 +27,10 @@ void present_voucher_redeemed_screen(const VoucherInfo* info)
     if (info == NULL) return; 
     VoucherObject* v_obj = get_current_shop_voucher_object();
 
-    // --- 0. THE SNAPSHOT ---
-    u16 shop_bg_snapshot[1024]; 
-    memcpy32(shop_bg_snapshot, &se_mem[MAIN_BG_SBB][0], 512);
+    tte_erase_rect(72, 56, 240, 160); 
 
-    tte_erase_rect(72, 56, 200, 160); 
-
-    // --- PHASE 1: SLIDE DOWN & HIDE JOKERS ---
+    // --- PHASE 1: SLIDE DOWN (The game_shop_outro method) ---
+    // The game natively slides the menu down for 20 frames
     for (int i = 0; i < 20; i++) {
         VBlankIntrWait();
         mmFrame(); 
@@ -37,11 +38,16 @@ void present_voucher_redeemed_screen(const VoucherInfo* info)
 
         main_bg_se_move_rect_1_tile_vert(POP_MENU_ANIM_RECT, SCREEN_DOWN);
 
+        int offset = i + 1; 
+
         ListItr itr = list_itr_create(&_shop_jokers_list);
         JokerObject* j_obj;
         while ((j_obj = list_itr_next(&itr))) {
-            j_obj->sprite_object->ty = int2fx(160); 
-            j_obj->sprite_object->y = int2fx(160); 
+            int current_y = 71 + (offset * 8); 
+            if (current_y > 160) current_y = 160; 
+
+            j_obj->sprite_object->y = int2fx(current_y);
+            j_obj->sprite_object->ty = int2fx(current_y);
             joker_object_update(j_obj);
         }
 
@@ -55,12 +61,9 @@ void present_voucher_redeemed_screen(const VoucherInfo* info)
     }
 
     // --- PHASE 2: THE REVEAL & SHAKE ---
-    // Dynamically calculate the perfect X coordinates based on text length!
-    // The visual center of our 32x32 sprite is at pixel 128 (112 + 16px).
-    // The font is 8 pixels wide per character.
     int name_length = strlen(info->name);
-    int text_name_x = 128 - (name_length * 4); // * 4 acts as (width * 8 / 2)
-    int text_redeemed_x = 128 - (9 * 4); // "Redeemed!" is exactly 9 characters long
+    int text_name_x = TEXT_CENTER_X - (name_length * 4); 
+    int text_redeemed_x = TEXT_CENTER_X - (9 * 4); 
 
     tte_printf("#{P:%d,%d; cx:0x%X000}%s", text_name_x, TEXT_NAME_Y, TTE_WHITE_PB, info->name);
     tte_printf("#{P:%d,%d; cx:0x%X000}Redeemed!", text_redeemed_x, TEXT_REDEEMED_Y, TTE_WHITE_PB);
@@ -91,38 +94,54 @@ void present_voucher_redeemed_screen(const VoucherInfo* info)
         if (key_hit(KEY_A | KEY_B)) break;
     }
 
-    // --- PHASE 3: SLIDE UP ---
-    tte_erase_rect(72, 56, 200, 160); 
+    // --- PHASE 3: SLIDE UP (The game_shop_intro method) ---
+    tte_erase_rect(72, 56, 240, 160); 
 
-    // FIX: Instantly teleport the voucher off-screen so it disappears before the slide!
+    // Make the voucher instantly vanish into the floor
     if (v_obj) {
         v_obj->sprite_object->x = int2fx(SPRITE_CENTER_X);
-        v_obj->sprite_object->y = int2fx(160); // Drops below the 160px screen boundary
+        v_obj->sprite_object->y = int2fx(160);
         v_obj->sprite_object->tx = int2fx(SPRITE_CENTER_X);
         v_obj->sprite_object->ty = int2fx(160);
         sprite_object_update(v_obj->sprite_object);
     }
 
-    for (int i = 0; i < 20; i++) {
+    // THE MAGIC RESTORE: Safely copy the pure ROM map into the sliding area!
+    // This perfectly sets up the "lowered" menu state before sliding up.
+    // memcpy16 is a safe hardware copy that completely ignores compiler quirks!
+    int width = POP_MENU_ANIM_RECT.right - POP_MENU_ANIM_RECT.left + 1;
+    for (int y = POP_MENU_ANIM_RECT.top; y <= POP_MENU_ANIM_RECT.bottom; y++) {
+        memcpy16(&se_mem[MAIN_BG_SBB][y * 32 + POP_MENU_ANIM_RECT.left],
+                 &background_shop_gfxMap[y * 32 + POP_MENU_ANIM_RECT.left],
+                 width);
+    }
+
+    // The game natively slides the menu UP for exactly 12 frames!
+    for (int i = 0; i < 12; i++) {
         VBlankIntrWait();
         mmFrame(); 
         affine_background_update(); 
         
-        main_bg_se_move_rect_1_tile_vert(POP_MENU_ANIM_RECT, SCREEN_UP);
+        main_bg_se_copy_rect_1_tile_vert(POP_MENU_ANIM_RECT, SCREEN_UP);
+
+        int offset = 11 - i; // 11 down to 0 perfectly aligns with the 12 frames!
 
         ListItr itr = list_itr_create(&_shop_jokers_list);
         JokerObject* j_obj;
         while ((j_obj = list_itr_next(&itr))) {
-            j_obj->sprite_object->ty = int2fx(71); 
+            int current_y = 71 + (offset * 8);
+            
+            // Safe bounds check to keep Jokers off the ceiling
+            if (current_y > 160) current_y = 160;
+
+            j_obj->sprite_object->y = int2fx(current_y);
+            j_obj->sprite_object->ty = int2fx(current_y);
             joker_object_update(j_obj);
         }
-
-        // We completely ignore the voucher object here so it doesn't return!
         
         sprite_draw();
     }
     
-    // --- 4. THE RESTORE ---
-    memcpy32(&se_mem[MAIN_BG_SBB][0], shop_bg_snapshot, 512);
+    // --- 4. TEXT REFRESH ---
     game_force_shop_background_redraw();
 }
