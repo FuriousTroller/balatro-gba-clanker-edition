@@ -372,7 +372,7 @@ static bool can_discard_hand(void);
 // Screenblock rects
 static const Rect ROUND_END_MENU_RECT       = {9,       7,      24,     20 };
 
-static const Rect POP_MENU_ANIM_RECT        = {9,       7,      24,     31 };
+const Rect POP_MENU_ANIM_RECT        = {9,       7,      24,     31 };
 // The rect for popping menu animations (round end, shop, blinds)
 // - extends beyond the visible screen to the end of the screenblock
 // It includes both the target and source position rects.
@@ -6531,4 +6531,28 @@ static void game_win_on_update()
     }
 
     game_over_process_user_input();
+}
+
+// Place this at the bottom of game.c
+void game_force_shop_background_redraw(void)
+{
+    // 1. Reprint the Reroll Cost
+    tte_printf(
+        "#{P:%d,%d; cx:0x%X000}$%d",
+        SHOP_REROLL_RECT.left,
+        SHOP_REROLL_RECT.top,
+        TTE_WHITE_PB,
+        reroll_cost
+    );
+
+    // 2. Reprint the prices of the remaining unbought Jokers
+    ListItr itr = list_itr_create(&_shop_jokers_list);
+    JokerObject* j_obj;
+    while ((j_obj = list_itr_next(&itr)))
+    {
+        if (j_obj != NULL)
+        {
+            print_price_under_sprite_object(j_obj->sprite_object, j_obj->joker->value);
+        }
+    }
 }

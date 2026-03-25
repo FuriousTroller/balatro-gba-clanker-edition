@@ -4,72 +4,112 @@
 #include "joker.h"
 #include "graphic_utils.h"
 #include <tonc.h>
+#include <maxmod.h>
+#include <string.h> // Needed to dynamically center the text!
 
-// Link to the shop items from game.c
+extern void sprite_draw(void);
+extern void affine_background_update(void); 
 extern List _shop_jokers_list;
 extern const Rect POP_MENU_ANIM_RECT;
+void game_force_shop_background_redraw(void);
+
+const int SPRITE_CENTER_X = 112; 
+const int CENTER_VOUCHER_Y = 80;
+const int TEXT_NAME_Y = 65; 
+const int TEXT_REDEEMED_Y = 115; 
 
 void present_voucher_redeemed_screen(const VoucherInfo* info) 
 {
     if (info == NULL) return; 
     VoucherObject* v_obj = get_current_shop_voucher_object();
 
-    // --- PHASE 1: SLIDE DOWN ---
-    // We replicate your 'game_shop_outro' logic but we DON'T destroy the cards!
+    // --- 0. THE SNAPSHOT ---
+    u16 shop_bg_snapshot[1024]; 
+    memcpy32(shop_bg_snapshot, &se_mem[MAIN_BG_SBB][0], 512);
+
+    tte_erase_rect(72, 56, 200, 160); 
+
+    // --- PHASE 1: SLIDE DOWN & HIDE JOKERS ---
     for (int i = 0; i < 20; i++) {
         VBlankIntrWait();
-        
-        // 1. Slide the Background Tiles down
+        mmFrame(); 
+        affine_background_update(); 
+
         main_bg_se_move_rect_1_tile_vert(POP_MENU_ANIM_RECT, SCREEN_DOWN);
 
-        // 2. Tell the Jokers to slide off-screen
         ListItr itr = list_itr_create(&_shop_jokers_list);
         JokerObject* j_obj;
         while ((j_obj = list_itr_next(&itr))) {
-            j_obj->sprite_object->ty = int2fx(160); // Target: Floor
+            j_obj->sprite_object->ty = int2fx(160); 
+            j_obj->sprite_object->y = int2fx(160); 
             joker_object_update(j_obj);
         }
 
-        // 3. Move the Voucher to the center of the screen
         if (v_obj) {
-            v_obj->sprite_object->ty = int2fx(80); // Target: Center
+            v_obj->sprite_object->tx = int2fx(SPRITE_CENTER_X);
+            v_obj->sprite_object->ty = int2fx(CENTER_VOUCHER_Y);
             sprite_object_update(v_obj->sprite_object);
         }
+        
+        sprite_draw();
     }
 
-    // --- PHASE 2: THE REVEAL ---
-    tte_erase_rect(0, 0, 240, 160); 
-    tte_printf("#{P:120,40; cx:0x%X000}%s", TTE_WHITE_PB, info->name);
-    tte_printf("#{P:120,120; cx:0x%X000}Redeemed!", TTE_WHITE_PB);
+    // --- PHASE 2: THE REVEAL & SHAKE ---
+    // Dynamically calculate the perfect X coordinates based on text length!
+    // The visual center of our 32x32 sprite is at pixel 128 (112 + 16px).
+    // The font is 8 pixels wide per character.
+    int name_length = strlen(info->name);
+    int text_name_x = 128 - (name_length * 4); // * 4 acts as (width * 8 / 2)
+    int text_redeemed_x = 128 - (9 * 4); // "Redeemed!" is exactly 9 characters long
 
-    // Shake and Wait
-    u16 prev_keys = ~REG_KEYINPUT & KEY_MASK;
+    tte_printf("#{P:%d,%d; cx:0x%X000}%s", text_name_x, TEXT_NAME_Y, TTE_WHITE_PB, info->name);
+    tte_printf("#{P:%d,%d; cx:0x%X000}Redeemed!", text_redeemed_x, TEXT_REDEEMED_Y, TTE_WHITE_PB);
+
     int frame = 0;
     while(true) {
         VBlankIntrWait();
-        
-        // Keep the "Juice" going
-        if (frame < 12 && v_obj) {
-            int s = (frame % 2 == 0) ? 2 : -2;
-            v_obj->sprite_object->x = int2fx(120 + s); // Shake at center
+        mmFrame();  
+        affine_background_update(); 
+        key_poll(); 
+
+        if (v_obj) {
+            if (frame <= 12) {
+                int shake_x = (frame < 12) ? ((frame % 2 == 0) ? 2 : -2) : 0;
+                int shake_y = (frame < 12) ? ((frame % 3 == 0) ? 2 : -2) : 0;
+                
+                v_obj->sprite_object->x = int2fx(SPRITE_CENTER_X + shake_x);
+                v_obj->sprite_object->y = int2fx(CENTER_VOUCHER_Y + shake_y);
+                v_obj->sprite_object->tx = int2fx(SPRITE_CENTER_X + shake_x);
+                v_obj->sprite_object->ty = int2fx(CENTER_VOUCHER_Y + shake_y);
+            }
             sprite_object_update(v_obj->sprite_object);
         }
         frame++;
+        
+        sprite_draw();
 
-        u16 keys_hit = (~REG_KEYINPUT & KEY_MASK) & ~prev_keys;
-        if (keys_hit & (KEY_A | KEY_B)) break;
-        prev_keys = ~REG_KEYINPUT & KEY_MASK;
+        if (key_hit(KEY_A | KEY_B)) break;
     }
 
     // --- PHASE 3: SLIDE UP ---
-    tte_erase_rect(0, 0, 240, 160);
+    tte_erase_rect(72, 56, 200, 160); 
+
+    // FIX: Instantly teleport the voucher off-screen so it disappears before the slide!
+    if (v_obj) {
+        v_obj->sprite_object->x = int2fx(SPRITE_CENTER_X);
+        v_obj->sprite_object->y = int2fx(160); // Drops below the 160px screen boundary
+        v_obj->sprite_object->tx = int2fx(SPRITE_CENTER_X);
+        v_obj->sprite_object->ty = int2fx(160);
+        sprite_object_update(v_obj->sprite_object);
+    }
+
     for (int i = 0; i < 20; i++) {
         VBlankIntrWait();
+        mmFrame(); 
+        affine_background_update(); 
         
-        // 1. Pull the Tiles back up
         main_bg_se_move_rect_1_tile_vert(POP_MENU_ANIM_RECT, SCREEN_UP);
 
-        // 2. Pull the Jokers back to their shelf (ITEM_SHOP_Y = 71)
         ListItr itr = list_itr_create(&_shop_jokers_list);
         JokerObject* j_obj;
         while ((j_obj = list_itr_next(&itr))) {
@@ -77,10 +117,12 @@ void present_voucher_redeemed_screen(const VoucherInfo* info)
             joker_object_update(j_obj);
         }
 
-        // 3. Slide the Voucher back to its buy-box (Y:112)
-        if (v_obj) {
-            v_obj->sprite_object->ty = int2fx(112);
-            sprite_object_update(v_obj->sprite_object);
-        }
+        // We completely ignore the voucher object here so it doesn't return!
+        
+        sprite_draw();
     }
+    
+    // --- 4. THE RESTORE ---
+    memcpy32(&se_mem[MAIN_BG_SBB][0], shop_bg_snapshot, 512);
+    game_force_shop_background_redraw();
 }

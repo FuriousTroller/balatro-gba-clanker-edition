@@ -77,16 +77,17 @@ void effect_antimatter(void)
 // REGISTRY
 // --------------------------------------------------------
 const VoucherInfo voucher_registry[] = {
-    {0,  1,   10, effect_overstock     },
-    {1,  255, 10, effect_overstock_plus},
-    {2,  3,   10, effect_clearance_sale},
-    {3,  255, 10, effect_liquidation   },
-    {4,  5,   10, effect_reroll_surplus},
-    {5,  255, 10, effect_reroll_glut   },
-    {6,  7,   10, effect_grabber       },
-    {7,  255, 10, effect_nacho_tong    },
-    {8,  9,   10, effect_wasteful      },
-    {9,  255, 10, effect_recyclomancy  },
-    {10, 11,  10, effect_blank         },
-    {11, 255, 10, effect_antimatter    },
+    // ID | Name               | Upgr | Cost | Effect Function
+    {0,  "Overstock",       1,   10, effect_overstock     },
+    {1,  "Overstock Plus",  255, 10, effect_overstock_plus},
+    {2,  "Clearance Sale",  3,   10, effect_clearance_sale},
+    {3,  "Liquidation",     255, 10, effect_liquidation   },
+    {4,  "Hone",            5,   10, effect_reroll_surplus},
+    {5,  "Glow Up",         255, 10, effect_reroll_glut   },
+    {6,  "Grabber",         7,   10, effect_grabber       },
+    {7,  "Nacho Tong",      255, 10, effect_nacho_tong    },
+    {8,  "Wasteful",        9,   10, effect_wasteful      },
+    {9,  "Recyclomancy",    255, 10, effect_recyclomancy  },
+    {10, "Blank",           11,  10, effect_blank         },
+    {11, "Antimatter",      255, 10, effect_antimatter    },
 };

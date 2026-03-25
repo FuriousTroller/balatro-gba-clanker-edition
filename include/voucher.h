@@ -33,4 +33,7 @@ VoucherObject* get_current_shop_voucher_object(void);
 void spawn_shop_voucher_sprite(void);
 void despawn_shop_voucher_sprite(void);
 
+// Declare the presentation function so voucher.c can use it
+void present_voucher_redeemed_screen(const VoucherInfo* info);
+
 #endif // VOUCHER_H
