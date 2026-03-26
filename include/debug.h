@@ -22,7 +22,6 @@
 #define DEBUG_H
 
 #include <stdbool.h>
-#include <tonc.h>
 
 /* ========================================================================
  * MASTER SWITCH - set to 1 to enable all debug features, 0 to disable

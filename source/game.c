@@ -343,7 +343,7 @@ static bool can_discard_hand(void);
 // Screenblock rects
 static const Rect ROUND_END_MENU_RECT       = {9,       7,      24,     20 }; 
 
-static const Rect POP_MENU_ANIM_RECT        = {9,       7,      24,     31 };
+const Rect POP_MENU_ANIM_RECT        = {9,       7,      24,     31 };
 // The rect for popping menu animations (round end, shop, blinds) 
 // - extends beyond the visible screen to the end of the screenblock
 // It includes both the target and source position rects. 
@@ -644,7 +644,7 @@ static List _discarded_jokers_list;
 static List _expired_jokers_list;
 
 BITSET_DEFINE(_avail_jokers_bitset, MAX_DEFINABLE_JOKERS)
-static List _shop_jokers_list;
+List _shop_jokers_list;
 
 // Stacks
 static CardObject* played[MAX_SELECTION_SIZE] = {NULL};
@@ -4041,7 +4041,7 @@ static void game_shop_create_items(void)
     for (int i = 0; i < slots; i++)
     {
         int joker_id = 0;
-#ifdef TEST_JOKER_ID0
+#ifdef TEST_JOKER_ID0  // Allow defining an ID for a joker to always appear in shop and be tested
         if (is_shop_joker_avail(TEST_JOKER_ID0))
         {
             joker_id = TEST_JOKER_ID0;
@@ -5179,4 +5179,27 @@ void game_refresh_hud(void)
     display_discards(discards);
     display_ante(ante);
     display_round(curr_round);
+}
+
+void game_force_shop_background_redraw(void)
+{
+    // 1. Reprint the Reroll Cost
+    tte_printf(
+        "#{P:%d,%d; cx:0x%X000}$%d",
+        SHOP_REROLL_RECT.left,
+        SHOP_REROLL_RECT.top,
+        TTE_WHITE_PB,
+        reroll_cost
+    );
+
+    // 2. Reprint the prices of the remaining unbought Jokers
+    ListItr itr = list_itr_create(&_shop_jokers_list);
+    JokerObject* j_obj;
+    while ((j_obj = list_itr_next(&itr)))
+    {
+        if (j_obj != NULL)
+        {
+            print_price_under_sprite_object(j_obj->sprite_object, j_obj->joker->value);
+        }
+    }
 }

@@ -1,3 +1,8 @@
+/**
+ * @file voucher.h
+ * @brief Core logic, registry, and structs for Vouchers.
+ */
+
 #ifndef VOUCHER_H
 #define VOUCHER_H
 
@@ -5,6 +10,7 @@
 
 #include <stdbool.h>
 #include <tonc.h>
+#define MAX_VOUCHERS 32 // still magic number but still, even the orignal balatro doesn't have this many vouchers
 
 typedef struct
 {

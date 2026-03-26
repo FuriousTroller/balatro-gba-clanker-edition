@@ -72,6 +72,8 @@ void buy_current_shop_voucher(void)
         _current_shop_voucher->info->on_buy_func();
     }
 
+    // This starts the menu-slide animation and blocks the loop 
+    // until the player acknowledges the purchase.
     present_voucher_redeemed_screen(_current_shop_voucher->info);
 
     if (_current_shop_voucher->sprite_object != NULL)
