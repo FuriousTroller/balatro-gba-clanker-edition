@@ -2,6 +2,11 @@
 #include "joker.h"
 #include "list.h"
 #include "sprite.h"
+<<<<<<< Updated upstream
+=======
+#include "voucher.h"
+#include "pack.h"
+>>>>>>> Stashed changes
 
 POOL_ENTRY(Sprite, MAX_SPRITES);
 POOL_ENTRY(SpriteObject, MAX_SPRITE_OBJECTS);
@@ -10,3 +15,4 @@ POOL_ENTRY(JokerObject, MAX_ACTIVE_JOKERS);
 POOL_ENTRY(Card, MAX_CARDS);
 POOL_ENTRY(CardObject, MAX_CARDS_ON_SCREEN);
 POOL_ENTRY(ListNode, MAX_LIST_NODES);
+POOL_ENTRY(PackObject, 4);

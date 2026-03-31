@@ -21,6 +21,12 @@
 #include "sprite.h"
 #include "tonc_memdef.h"
 #include "util.h"
+<<<<<<< Updated upstream
+=======
+#include "voucher.h"
+#include "pack.h"
+#include "pool.h"
+>>>>>>> Stashed changes
 
 #include <maxmod.h>
 #include <stdint.h>
@@ -293,6 +299,27 @@ static bool shop_reroll_row_on_selection_changed(
     const Selection* new_selection
 );
 static int shop_reroll_row_get_size(void);
+<<<<<<< Updated upstream
+=======
+static void shop_voucher_row_on_key_transit(SelectionGrid* selection_grid, Selection* selection);
+static bool shop_voucher_row_on_selection_changed(
+    SelectionGrid* selection_grid,
+    int row_idx,
+    const Selection* prev_selection,
+    const Selection* new_selection
+);
+static int shop_voucher_row_get_size(void);
+static int shop_bottom_shelf_get_size(void);
+static bool shop_bottom_shelf_on_selection_changed(SelectionGrid* selection_grid, int row_idx, const Selection* prev_selection, const Selection* new_selection);
+static void shop_bottom_shelf_on_key_transit(SelectionGrid* selection_grid, Selection* selection);
+
+static bool shop_top_row_on_selection_changed(
+    SelectionGrid* selection_grid,
+    int row_idx,
+    const Selection* prev_selection,
+    const Selection* new_selection
+);
+>>>>>>> Stashed changes
 static bool shop_top_row_on_selection_changed(
     SelectionGrid* selection_grid,
     int row_idx,
@@ -488,9 +515,16 @@ Button game_playing_buttons[] = {
 };
 
 SelectionGridRow shop_selection_rows[] = {
+<<<<<<< Updated upstream
     {0, jokers_sel_row_get_size,  jokers_sel_row_on_selection_changed,  jokers_sel_row_on_key_transit,  {.wrap = false}},
     {1, shop_top_row_get_size,    shop_top_row_on_selection_changed,    shop_top_row_on_key_transit,    {.wrap = false}},
     {2, shop_reroll_row_get_size, shop_reroll_row_on_selection_changed, shop_reroll_row_on_key_transit, {.wrap = false}}
+=======
+    {0, jokers_sel_row_get_size,   jokers_sel_row_on_selection_changed,   jokers_sel_row_on_key_transit,   {.wrap = false}},
+    {1, shop_top_row_get_size,     shop_top_row_on_selection_changed,     shop_top_row_on_key_transit,     {.wrap = false}},
+    {2, shop_reroll_row_get_size,  shop_reroll_row_on_selection_changed,  shop_reroll_row_on_key_transit,  {.wrap = false}},
+    {3, shop_bottom_shelf_get_size, shop_bottom_shelf_on_selection_changed, shop_bottom_shelf_on_key_transit, {.wrap = false}}
+>>>>>>> Stashed changes
 };
 
 static const Selection SHOP_INIT_SEL = {-1, 1};
@@ -742,6 +776,13 @@ void game_init()
 
     jokers_available_to_shop_init();
 
+<<<<<<< Updated upstream
+=======
+    pack_init();
+    pack_load_gfx();
+
+    max_jokers = 5;
+>>>>>>> Stashed changes
     hands = max_hands;
     discards = max_discards;
     timer = TM_ZERO;
@@ -3937,7 +3978,7 @@ static void erase_price_under_sprite_object(SpriteObject* sprite_object)
     tte_erase_rect_wrapper(price_rect);
 }
 
-static inline int game_shop_get_rand_available_joker_id(void)
+int game_shop_get_rand_available_joker_id(void)
 {
     // Roll for what rarity the joker will be
     int joker_rarity = joker_get_random_rarity();
@@ -4030,6 +4071,41 @@ static void game_shop_create_items(void)
     }
 }
 
+void unload_shop_sprites(void) {
+    // 1. Unload all Jokers from the hardware renderer
+    ListItr j_itr = list_itr_create(&_shop_jokers_list);
+    JokerObject* j_obj;
+    while ((j_obj = list_itr_next(&j_itr))) {
+        if (j_obj != NULL && j_obj->sprite_object != NULL && j_obj->sprite_object->sprite != NULL) {
+            // THE FIX: Access attr0 through the 'obj' pointer!
+            j_obj->sprite_object->sprite->obj->attr0 |= ATTR0_HIDE; 
+        }
+    }
+
+    // 2. Unload the Voucher from the hardware renderer
+    VoucherObject* v_obj = get_current_shop_voucher_object();
+    if (v_obj != NULL && v_obj->sprite_object != NULL && v_obj->sprite_object->sprite != NULL) {
+        v_obj->sprite_object->sprite->obj->attr0 |= ATTR0_HIDE;
+    }
+}
+
+void reload_shop_sprites(void) {
+    // Bring Jokers back
+    ListItr j_itr = list_itr_create(&_shop_jokers_list);
+    JokerObject* j_obj;
+    while ((j_obj = list_itr_next(&j_itr))) {
+        if (j_obj != NULL && j_obj->sprite_object != NULL && j_obj->sprite_object->sprite != NULL) {
+            j_obj->sprite_object->sprite->obj->attr0 &= ~ATTR0_HIDE; 
+        }
+    }
+
+    // Bring Voucher back
+    VoucherObject* v_obj = get_current_shop_voucher_object();
+    if (v_obj != NULL && v_obj->sprite_object != NULL && v_obj->sprite_object->sprite != NULL) {
+        v_obj->sprite_object->sprite->obj->attr0 &= ~ATTR0_HIDE; 
+    }
+}
+
 // Intro sequence (menu and shop icon coming into frame)
 static void game_shop_intro()
 {
@@ -4037,7 +4113,39 @@ static void game_shop_intro()
 
     if (timer == TM_CREATE_SHOP_ITEMS_WAIT)
     {
+<<<<<<< Updated upstream
         game_shop_create_items();
+=======
+        // game_shop_create_items();
+        // spawn_shop_voucher_sprite();
+
+        if (get_current_shop_voucher_object() != NULL)
+        {
+            VoucherObject* v = get_current_shop_voucher_object();
+            // Snap the X coordinate to its target, and hide the Y coordinate off-screen!
+            v->sprite_object->x = v->sprite_object->tx;
+            v->sprite_object->y = int2fx(160); 
+            
+            // Force the GBA hardware to apply the coordinates instantly
+            sprite_position(
+                v->sprite_object->sprite, 
+                fx2int(v->sprite_object->x), 
+                fx2int(v->sprite_object->y)
+            );
+            print_price_under_sprite_object(v->sprite_object, v->info->cost);
+        }
+
+        for (int i = 0; i < 2; i++) {
+            int pack_x = 136 + (i * 48); 
+            int pack_y = 112;            
+
+            pack_spawn_in_shop(pack_x, pack_y); 
+            
+            // Print the price under the newly spawned pack!
+            PackObject* newly_spawned = list_get_at_idx(&_shop_packs_list, list_get_len(&_shop_packs_list) - 1);
+            print_price_under_sprite_object(newly_spawned->sprite_object, newly_spawned->info->cost);
+        }
+>>>>>>> Stashed changes
     }
 
     if (timer >= TM_SHIFT_SHOP_ICON_WAIT) // Shift the shop icon
@@ -4382,6 +4490,118 @@ static void shop_reroll_row_on_key_transit(SelectionGrid* selection_grid, Select
     }
 }
 
+<<<<<<< Updated upstream
+=======
+// ----------------------------------------------------
+// VOUCHER SELECTION GRID LOGIC
+// ----------------------------------------------------
+static int shop_voucher_row_get_size(void)
+{
+    // Only exists in the grid if it hasn't been bought!
+    return get_current_shop_voucher_object() != NULL ? 1 : 0;
+}
+
+static bool shop_voucher_row_on_selection_changed(
+    SelectionGrid* selection_grid,
+    int row_idx,
+    const Selection* prev_selection,
+    const Selection* new_selection
+)
+{
+    VoucherObject* voucher = get_current_shop_voucher_object();
+    if (voucher == NULL)
+        return true;
+
+    if (row_idx == prev_selection->y)
+    {
+        sprite_object_set_focus(voucher->sprite_object, false);
+    }
+    else if (row_idx == new_selection->y)
+    {
+        sprite_object_set_focus(voucher->sprite_object, true);
+    }
+
+    return true;
+}
+
+static void shop_voucher_row_on_key_transit(SelectionGrid* selection_grid, Selection* selection)
+{
+    if (!key_hit(SELECT_CARD))
+        return;
+
+    VoucherObject* current_voucher = get_current_shop_voucher_object();
+
+    if (current_voucher != NULL && money >= current_voucher->info->cost)
+    {
+        money -= current_voucher->info->cost;
+        display_money();
+
+        erase_price_under_sprite_object(current_voucher->sprite_object);
+
+        buy_current_shop_voucher();
+        play_sfx(SFX_BUTTON, MM_BASE_PITCH_RATE, BUTTON_SFX_VOLUME);
+
+        // Push the cursor up to the reroll button so the game doesn't crash on an empty row!
+        selection_grid_move_selection_vert(selection_grid, -1);
+    }
+}
+
+// --- MASTER BOTTOM SHELF LOGIC (VOUCHER + PACKS) ---
+
+static int shop_bottom_shelf_get_size(void) {
+    // Total size = (1 if Voucher exists) + (Number of Packs on shelf)
+    return shop_voucher_row_get_size() + shop_packs_row_get_size();
+}
+
+static bool shop_bottom_shelf_on_selection_changed(
+    SelectionGrid* selection_grid,
+    int row_idx,
+    const Selection* prev_selection,
+    const Selection* new_selection
+) {
+    int v_size = shop_voucher_row_get_size();
+
+    // 1. Un-highlight the old selection
+    if (prev_selection->y == row_idx) {
+        if (prev_selection->x < v_size) {
+            shop_voucher_row_on_selection_changed(selection_grid, row_idx, prev_selection, new_selection);
+        } else {
+            // Trick pack.c into thinking its local index starts at 0
+            Selection fake_prev = *prev_selection;
+            fake_prev.x -= v_size; 
+            shop_packs_row_on_selection_changed(selection_grid, row_idx, &fake_prev, new_selection);
+        }
+    }
+
+    // 2. Highlight the new selection
+    if (new_selection->y == row_idx) {
+        if (new_selection->x < v_size) {
+            shop_voucher_row_on_selection_changed(selection_grid, row_idx, prev_selection, new_selection);
+        } else {
+            Selection fake_new = *new_selection;
+            fake_new.x -= v_size;
+            shop_packs_row_on_selection_changed(selection_grid, row_idx, prev_selection, &fake_new);
+        }
+    }
+
+    return true;
+}
+
+static void shop_bottom_shelf_on_key_transit(SelectionGrid* selection_grid, Selection* selection) {
+    int v_size = shop_voucher_row_get_size();
+
+    if (selection->x < v_size) {
+        // Player pressed 'A' on the Voucher
+        shop_voucher_row_on_key_transit(selection_grid, selection);
+    } else {
+        // Player pressed 'A' on a Pack
+        Selection fake_sel = *selection;
+        fake_sel.x -= v_size; // Adjust index so pack.c gets 0 or 1, instead of 1 or 2
+        shop_packs_row_on_key_transit(selection_grid, &fake_sel);
+    }
+}
+
+>>>>>>> Stashed changes
 // Shop menu input and selection
 static void game_shop_process_user_input()
 {
@@ -4489,6 +4709,22 @@ static void game_shop_on_update(GameVariables* vars)
         }
     }
 
+<<<<<<< Updated upstream
+=======
+    if (get_current_shop_voucher_object() != NULL)
+    {
+        sprite_object_update(get_current_shop_voucher_object()->sprite_object);
+    }
+
+    if (!list_is_empty(&_shop_packs_list)) {
+        ListItr pack_itr = list_itr_create(&_shop_packs_list);
+        PackObject* p_obj;
+        while ((p_obj = list_itr_next(&pack_itr))) {
+            if (p_obj != NULL) sprite_object_update(p_obj->sprite_object);
+        }
+    }
+
+>>>>>>> Stashed changes
     if (timer % 20 == 0)
     {
         game_shop_lights_anim_frame();
@@ -4521,6 +4757,19 @@ static void game_shop_on_exit(GameVariables* vars)
     }
 
     list_clear(&_shop_jokers_list);
+
+    // THIS IS TO DESTROY UNBOUGHT PACKS
+    while (list_get_len(&_shop_packs_list) > 0) {
+        PackObject* p_obj = list_get_at_idx(&_shop_packs_list, 0);
+        
+        erase_price_under_sprite_object(p_obj->sprite_object);
+        
+        // USE THE NATIVE ENGINE DESTRUCTORS!
+        sprite_object_destroy(&p_obj->sprite_object);
+        POOL_FREE(PackObject, p_obj);
+        
+        list_remove_at_idx(&_shop_packs_list, 0);
+    }
 
     increment_blind(BLIND_STATE_DEFEATED); // TODO: Move to game_round_end()?
 }
@@ -5025,4 +5274,8 @@ static void game_win_on_update(GameVariables* vars)
     }
 
     game_over_process_user_input();
+<<<<<<< Updated upstream
 }
+=======
+}
+>>>>>>> Stashed changes
