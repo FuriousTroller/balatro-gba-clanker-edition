@@ -451,7 +451,7 @@ static const BG_POINT MAIN_MENU_ACE_T       = {88,      26};
 
 //我的文件
 static bool is_money_enough(int money, int cost);
-static int count_joker_id(int joker_id);
+static int sum_joker_state(int joker_id);
 static int get_current_hand_size(void);
 // clang-format on
 
@@ -688,10 +688,56 @@ static Card* discard_pile[MAX_DECK_SIZE] = {NULL};
 static int discard_top = -1;
 
 // Joker Special Variables
-static int shortcut_joker_count = 0;
+int shortcut_joker_count = 0;
+int four_fingers_joker_count = 0;
 
-static int four_fingers_joker_count = 0;
 
+
+
+static const HandValues hand_update_values[] = {
+    {.chips = 0,   .mult = 0,  .display_name = NULL     }, // NONE
+    {.chips = 10,  .mult = 1,  .display_name = "HIGH C" }, // HIGH_CARD
+    {.chips = 15,  .mult = 1,  .display_name = "PAIR"   }, // PAIR
+    {.chips = 20,  .mult = 1,  .display_name = "2 PAIR" }, // TWO_PAIR
+    {.chips = 20,  .mult = 2,  .display_name = "3 OAK"  }, // THREE_OF_A_KIND
+    {.chips = 30,  .mult = 3,  .display_name = "STRT"   }, // STRAIGHT
+    {.chips = 15,  .mult = 2,  .display_name = "FLUSH"  }, // FLUSH
+    {.chips = 25,  .mult = 2,  .display_name = "FULL H" }, // FULL_HOUSE
+    {.chips = 30,  .mult = 3,  .display_name = "4 OAK"  }, // FOUR_OF_A_KIND
+    {.chips = 40,  .mult = 4,  .display_name = "STRT F" }, // STRAIGHT_FLUSH
+    {.chips = 40,  .mult = 4,  .display_name = "ROYAL F"}, // ROYAL_FLUSH
+    {.chips = 35,  .mult = 3,  .display_name = "5 OAK"  }, // FIVE_OF_A_KIND
+    {.chips = 40,  .mult = 4,  .display_name = "FLUSH H"}, // FLUSH_HOUSE
+    {.chips = 50,  .mult = 3,  .display_name = "FLUSH 5"}  // FLUSH_FIVE
+};
+
+static int hand_levels[16] = {1};
+void improve_hand_level(int hand_to_improve){
+
+    if (hand_to_improve == STRAIGHT_FLUSH || hand_to_improve == ROYAL_FLUSH){
+        hand_levels[STRAIGHT_FLUSH]++;
+        hand_levels[ROYAL_FLUSH]++;
+    }
+    else{
+        hand_levels[hand_to_improve]++;
+    }
+
+}
+void show_updated_level(){
+    HandValues hand = hand_base_values[hand_type];
+    HandValues hand_update = hand_update_values[hand_type];
+    chips = hand.chips + hand_levels[hand_type] * hand_update.chips;
+    mult = hand.mult + hand_levels[hand_type] * hand_update.mult;
+    display_chips();
+    display_mult();
+}
+int get_current_hand_type(void){
+    return hand_type;
+}
+bool check_probablity(int probability){
+    int random_value = is_joker_owned(146) ? 2 : 1;
+    return random() % 1000 < probability * random_value;
+}
 static int current_jidbs = 0;
 GBAL_UNUSED
 void offset_current_joker_index(int offset) { 
@@ -837,7 +883,9 @@ void game_init()
 
     for (int i = 0; i < 16; i++) {
         total_hands_played[i] = 0; 
-    } // Supernova
+        hand_levels[i] = 0;
+    } // Supernova and hand level
+    
 
     blind_select_tokens[BLIND_TYPE_SMALL] = blind_token_new(
         BLIND_TYPE_SMALL,
@@ -1996,7 +2044,7 @@ static void display_round(int value)
 
 static void display_hands(int value)
 {
-    // tte_erase_rect_wrapper(HANDS_TEXT_RECT);
+    tte_erase_rect_wrapper(HANDS_TEXT_RECT);
     tte_printf("#{P:%d,%d; cx:0xD000}%d", HANDS_TEXT_RECT.left, HANDS_TEXT_RECT.top, hands); // Hand
 }
 
@@ -2032,9 +2080,10 @@ static void set_hand(void)
     hand_type = compute_hand_type(_contained_hands);
 
     HandValues hand = hand_base_values[hand_type];
-
-    chips = hand.chips;
-    mult = hand.mult;
+    // 升级补丁
+    HandValues hand_update = hand_update_values[hand_type];
+    chips = hand.chips + hand_levels[hand_type] * hand_update.chips;
+    mult = hand.mult + hand_levels[hand_type] * hand_update.mult;
 
     print_hand_type(hand.display_name);
     display_chips();
@@ -3456,6 +3505,8 @@ static inline bool play_before_scoring_cards_update(void)
     return false;
 }
 
+int CARD_STT=0;
+extern void change_card_sprite(CardObject* card_object, int layer);
 // returns true if the scoring loop has returned early
 static inline bool play_scoring_cards_update(void)
 {
@@ -3478,6 +3529,8 @@ static inline bool play_scoring_cards_update(void)
             _joker_card_held_end_itr = list_itr_create(&_owned_jokers_list);
             scored_card_index = hand_top;
 
+            // 在此处加入玻璃牌破碎结算
+
             play_state = PLAY_SCORING_HELD_CARDS;
 
             return false;
@@ -3499,6 +3552,8 @@ static inline bool play_scoring_cards_update(void)
             tte_set_special(TTE_BLUE_PB * TTE_SPECIAL_PB_MULT_OFFSET);
 
             u8 card_value = card_get_value(scored_card_object->card);
+            
+            change_card_sprite(scored_card_object, scored_card_object->sprite_object->sprite->idx); // TESTING: change the card sprite to a random one when scored to test retriggering multiple times on the same card
 
             // ---> START CAPTCHA JOKER HOOK (ID 107) <---
             if (ai_is_playing && is_joker_owned(107) && card_is_face(scored_card_object->card)) 
@@ -3520,6 +3575,19 @@ static inline bool play_scoring_cards_update(void)
             // Relocated card scoring logic here
             chips = u32_protected_add(chips, card_value);
             display_chips();
+            
+            // 玻璃、幸运牌等结算
+            /*
+            snprintf(score_buffer, sizeof(score_buffer), "X%hhu", 2);
+            tte_write(score_buffer);
+
+            card_object_shake(scored_card_object, SFX_CHIPS_CARD);
+
+            // Relocated card scoring logic here
+            mult = u32_protected_mult(mult, 2);
+            display_mult();
+            */
+            
 
             // Allow Joker scoring
             _joker_scored_itr = list_itr_create(&_owned_jokers_list);
@@ -3582,10 +3650,10 @@ static inline bool play_scoring_card_jokers_update(void)
 // returns true if the scoring loop has returned early
 static inline bool play_scoring_held_cards_update(int played_idx)
 {
-    if (played_idx == 10086)
-    {
-        return false;
-    }
+    //if (played_idx == 10086)
+    //{
+        //return false;
+    //}
     if (scored_card_index < 0)
     {
         scored_card_index = 0;
@@ -4291,6 +4359,7 @@ static int calculate_interest_reward(void)
     int reward = (money / 5) * INTEREST_PER_5;
     if (reward > MAX_INTEREST)
         reward = MAX_INTEREST;
+    reward += reward * sum_joker_state(138);
     return reward;
 }
 
@@ -5227,23 +5296,23 @@ static inline void game_shop_reroll(int* reroll_cost)
 
 // 信用卡相关函数
 static bool is_money_enough(int money, int cost){
-    int base_cost = count_joker_id(116) ? cost - 20 : cost; // Flash Card gives a discount of 2
+    int base_cost = is_joker_owned(116) ? cost - 20 : cost; // Flash Card gives a discount of 2
     return money >= base_cost;
 }
 
-static int count_joker_id(int joker_id){
+static int sum_joker_state(int joker_id){
     int count = 0;
     for (int i = 0; i < list_get_len(&_owned_jokers_list); i++) {
         JokerObject* joker_obj = (JokerObject*)list_get_at_idx(&_owned_jokers_list, i);
         if (joker_obj->joker->id == joker_id) {
-            count++;
+            count+=joker_obj->joker->persistent_state;
         } 
     }
     return count;
 }
 
 static int get_current_hand_size(){
-    return hand_size - 2 * count_joker_id(123);
+    return hand_size + sum_joker_state(123) + sum_joker_state(113);
 }
 
 static void shop_reroll_row_on_key_transit(SelectionGrid* selection_grid, Selection* selection)
@@ -5262,7 +5331,7 @@ static void shop_reroll_row_on_key_transit(SelectionGrid* selection_grid, Select
 }
 
 static int get_first_reroll_cost(int* reroll_cost){
-    if (count_joker_id(122)) {
+    if (is_joker_owned(122)) {
         *reroll_cost = 0;
     }
     else {

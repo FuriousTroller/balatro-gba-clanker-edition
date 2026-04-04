@@ -1,6 +1,8 @@
 #include "card.h"
 
 #include "deck_gfx.h"
+#include "deck_back_gfx.h"
+
 #include "graphic_utils.h"
 
 #include <maxmod.h>
@@ -86,6 +88,17 @@ void card_object_update(CardObject* card_object)
         return;
     sprite_object_update(card_object->sprite_object);
 }
+
+void change_card_sprite(CardObject* card_object, int layer){
+    int tile_index = CARD_TID + (layer * CARD_SPRITE_OFFSET);
+    int ux = _card_sprite_lut[card_object->card->suit][card_object->card->rank] + 208 * 4 * (random() % 4 + 1);
+    memcpy32(
+        &tile_mem[TILE_MEM_OBJ_CHARBLOCK0_IDX][tile_index],
+        &deck_gfxTiles
+            [ux * TILE_SIZE],
+        TILE_SIZE * CARD_SPRITE_OFFSET
+    );
+} 
 
 void card_object_set_sprite(CardObject* card_object, int layer)
 {

@@ -4,6 +4,7 @@
 #include "util.h"
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "custom_joker_sheet_0.h"
 #include "custom_joker_sheet_1.h"
@@ -24,6 +25,11 @@
 #include "custom_joker_sheet_16.h"
 #include "custom_joker_sheet_17.h"
 #include "custom_joker_sheet_18.h"
+#include "custom_joker_sheet_19.h"
+#include "custom_joker_sheet_20.h"
+#include "custom_joker_sheet_21.h"
+#include "custom_joker_sheet_22.h"
+#include "custom_joker_sheet_23.h"
 // #include "custom_joker_sheet_x.h" // Add this when you make IDs 1xx & 1xx!
 
 // Creates a local shared memory struct specifically for your modded cards to use
@@ -36,10 +42,16 @@ extern int get_current_joker_index(void);
 extern void destroy_designated_joker(int joker_index);
 extern int get_current_ante(void);
 extern void add_common_joker(void);
+extern void offset_current_joker_index(int offset);
+extern void show_updated_level(void);
 extern bool is_c_j_fusion_active(void);
+extern bool check_probablity(int probability);
+extern void improve_hand_level(int hand_to_improve);
+extern int get_current_hand_type();
 #define MODDED_JOKER_START_ID 100
 #define NUM_JOKERS_PER_SPRITESHEET 2
 #define CLAMP_CUSTOM(x, low, high) ((x) > (high) ? (high) : ((x) < (low) ? 0 : (x)))
+static char xbuff[UINT_MAX_DIGITS+1];
 static JokerEffect custom_joker_effect_out = {0};
 
 // --- 0. LOCAL EFFECT OBJECT ---
@@ -52,7 +64,14 @@ static JokerEffect modded_shared_joker_effect = {0};
         return JOKER_EFFECT_FLAG_NONE;                       \
     }
 // --- 1. YOUR CUSTOM JOKER LOGIC ---
-
+bool is_suit_equal(int suit1, int suit2){
+    if (is_joker_owned(58)){
+        return suit1 % 2 == suit2 % 2;
+    }
+    else{
+        return suit1 == suit2;
+    }
+}
 static u32 mobius_joker_effect(
     Joker* joker, 
     Card* scored_card, 
@@ -394,9 +413,11 @@ static u32 egg_joker_effect(
   
     if (joker_event == JOKER_EVENT_ON_ROUND_END) {
         joker->value+=6; 
+        /*
         *joker_effect = &modded_shared_joker_effect;
         (*joker_effect)->message = "Hatched!";
         return JOKER_EFFECT_FLAG_MESSAGE;
+        */
     }
 
     return effect_flags_ret; 
@@ -466,25 +487,32 @@ static u32 seeing_double_joker_effect(
 )
 {
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
-  
+    // 必须遍历记分牌，不能用score事件，因为有retrigger
     if (joker_event == JOKER_EVENT_ON_JOKER_CREATED) {
-        joker->persistent_state = 1;    
+        joker->persistent_state = 0;    
     }
 
     if (joker_event == JOKER_EVENT_ON_HAND_PLAYED){
-        joker->persistent_state = 1; 
-    }
-    
-    if (joker_event == JOKER_EVENT_ON_CARD_SCORED_END) {        
-        if (scored_card->suit == CLUBS && joker->persistent_state % 2 != 0) {
-            joker->persistent_state *= 2; 
-        } 
-        if (scored_card->suit != CLUBS && joker->persistent_state % 3 != 0) {
-            joker->persistent_state *= 3; 
-        } 
+        joker->persistent_state = 0; 
+        CardObject** card_objects = get_played_array();
+        for (int i = 0; i <= get_played_top(); i++) {
+            if (!card_objects[i]->selected) continue; // Only count cards that are actually selected for scoring
+            u8 current_suit = card_objects[i]->card->suit;  
+            if (is_suit_equal(current_suit, CLUBS) && 
+                (joker->persistent_state & 1) == 0) {
+                joker->persistent_state |= 1; 
+                continue;
+            } 
+            if ((is_suit_equal(current_suit, SPADES) ||
+                is_suit_equal(current_suit, HEARTS) ||
+                is_suit_equal(current_suit, DIAMONDS)) && 
+                (joker->persistent_state & (1<<1)) == 0) {
+                joker->persistent_state |= (1<<1); 
+            } 
+        }
     }
 
-    if (joker_event == JOKER_EVENT_INDEPENDENT && joker->persistent_state % 6 == 0) {        
+    if (joker_event == JOKER_EVENT_INDEPENDENT && joker->persistent_state == 3) {        
         *joker_effect = &shared_joker_effect;
         (*joker_effect)->xmult = 2; 
         return JOKER_EFFECT_FLAG_XMULT;        
@@ -500,41 +528,32 @@ static u32 ride_bus_joker_effect(
 ) 
 {
     u32 flags = JOKER_EFFECT_FLAG_NONE;
-      // Set starting Chips to 16 when you buy it
+
     if (joker_event == JOKER_EVENT_ON_JOKER_CREATED) {
         joker->persistent_state = 2; 
-        
     }
-
     if (joker_event == JOKER_EVENT_ON_HAND_PLAYED) {
         *joker_effect = &shared_joker_effect;
         (*joker_effect)->message = "All Aboard!";
         flags |= JOKER_EFFECT_FLAG_MESSAGE;
     }
-
-
-    if (joker_event == JOKER_EVENT_ON_CARD_SCORED_END && card_is_face(scored_card)) {
+    if (joker_event == JOKER_EVENT_ON_CARD_SCORED && card_is_face(scored_card)) {
         joker->persistent_state = 1; 
     }
-
     if (joker_event == JOKER_EVENT_ON_HAND_SCORED_END) {
         if (joker->persistent_state % 2 == 0) {
             joker->persistent_state += 2; 
         }
         else {
             joker->persistent_state = 2; // Reset the bus if it never got past the starting point
-        }
-                
+        }                
     }
-
-    // Apply the Chips to the score
     if (joker_event == JOKER_EVENT_INDEPENDENT) {
         if (joker->persistent_state > 1) {
             *joker_effect = &shared_joker_effect;
             (*joker_effect)->mult = joker->persistent_state / 2;
             flags |= JOKER_EFFECT_FLAG_MULT; 
-        }
-        
+        }      
     }
     return flags;
 }
@@ -554,15 +573,14 @@ static u32 todo_list_joker_effect(
     if (joker_event == JOKER_EVENT_ON_HAND_PLAYED) {
         if (joker->persistent_state == *get_hand_type()) {
             *joker_effect = &shared_joker_effect;
-            (*joker_effect)->money = 5;
-            joker->persistent_state = random() % 8 + 1;  
+            (*joker_effect)->money = 5;  
             flags |= JOKER_EFFECT_FLAG_MONEY; 
         }
     }
-
-    // Apply the Chips to the score
-    if (joker_event == JOKER_EVENT_INDEPENDENT) {        
-       
+    if (joker_event == JOKER_EVENT_ON_ROUND_END){
+        joker->persistent_state = random() % 8 + 1;
+    }
+    if (joker_event == JOKER_EVENT_INDEPENDENT) {             
         *joker_effect = &shared_joker_effect;
         switch (joker->persistent_state)
         {
@@ -617,10 +635,6 @@ static u32 gift_card_joker_effect(
             JokerObject* j_obj = list_get_at_idx(jokers_list, i);
             j_obj->joker->value+=2; 
         }
-        *joker_effect = &shared_joker_effect;
-        (*joker_effect)->message = "Gifted!";       
-        effect_flags_ret |= JOKER_EFFECT_FLAG_MESSAGE;
-
     }
 
     return effect_flags_ret; 
@@ -642,13 +656,15 @@ static u32 stuntman_joker_effect(
 )
 {
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
-  
+
+    if (joker_event == JOKER_EVENT_ON_JOKER_CREATED){
+        joker->persistent_state = -2;
+    }
     if (joker_event == JOKER_EVENT_INDEPENDENT) {
         *joker_effect = &shared_joker_effect;
-        (*joker_effect)->chips = 300;       
+        (*joker_effect)->chips = 250;       
         effect_flags_ret |= JOKER_EFFECT_FLAG_CHIPS;
     }
-
     return effect_flags_ret;  
 }
 static u32 baseball_joker_effect(
@@ -662,7 +678,8 @@ static u32 baseball_joker_effect(
     if (joker_event == JOKER_EVENT_INDEPENDENT_END) {
         *joker_effect = &shared_joker_effect;
         (*joker_effect)->mult =  (get_mult() * 50 + 99) / 100;
-        effect_flags_ret = JOKER_EFFECT_FLAG_MULT;
+        (*joker_effect)->message = "X1`";
+        effect_flags_ret = JOKER_EFFECT_FLAG_XDECIMAL;
     }
     return effect_flags_ret;  
 }
@@ -719,9 +736,9 @@ static u32 ceremonial_dagger_joker_effect(
         joker->persistent_state = 0;   
     }
     if (joker_event == JOKER_EVENT_ON_BLIND_SELECTED &&
-    owned_joker_idx < list_get_len(get_jokers_list()) - 1) // Only trigger if we aren't the last Joker in the list (to avoid out of bounds)
-    {
-        
+        owned_joker_idx < list_get_len(get_jokers_list()) - 1 &&
+        joker->id != BLUEPRINT_JOKER_ID && joker->id != BRAINSTORM_JOKER_ID) // Only trigger if we aren't the last Joker in the list (to avoid out of bounds)
+    {   
         JokerObject* next_joker_obj = list_get_at_idx(get_jokers_list(), owned_joker_idx + 1);
         joker->persistent_state += next_joker_obj->joker->value;
         destroy_designated_joker(owned_joker_idx + 1); // This will remove the next Joker from our owned list and push it to the expired list, effectively "sacrificing" it. The engine will handle the rest based on the expire flag we set in the effect below.
@@ -747,40 +764,35 @@ static u32 castle_joker_effect(
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
 
     if (joker_event == JOKER_EVENT_ON_JOKER_CREATED) {
-        joker->persistent_state = random() % 4 * 10000000; // USE HIGH DIGIT TO TRACK SUIT, LOW DIGITS FOR CHIPS. This way we can have a random suit each round while still tracking chips in the same variable without needing extra state variables!
+        joker->persistent_state = random() % 4 ; // USE LOW DIGIT TO TRACK SUIT, HIGH DIGITS FOR CHIPS. This way we can have a random suit each round while still tracking chips in the same variable without needing extra state variables!
     }
     if (joker_event == JOKER_EVENT_ON_HAND_DISCARDED)   {
         CardObject** current_hand = get_hand_array();    
         // Scan the cards you are currently holding BEFORE they vanish
         for (int i = 0; i <= get_hand_top(); i++) {
             if (current_hand[i] != NULL && card_object_is_selected(current_hand[i])) {
-                if (current_hand[i]->card->suit == joker->persistent_state/10000000){ // If the card belongs to the suit we chose at random when conjuring this Joker{
-                    joker->persistent_state += 3;
+                if (is_suit_equal(current_hand[i]->card->suit, joker->persistent_state % 4)){ // If the card belongs to the suit we chose at random when conjuring this Joker{
+                    joker->persistent_state += (3 << 2);
                 }
             }
         }
-        static const char* end_suits[] = {"Diamond", "Club", "Heart", "Spade" };
-        *joker_effect = &shared_joker_effect;
-        (*joker_effect)->message = (char*)end_suits[joker->persistent_state/10000000];
-        effect_flags_ret = JOKER_EFFECT_FLAG_MESSAGE;
     }
-    if (joker_event==JOKER_EVENT_INDEPENDENT && joker->persistent_state % 10000000 > 0)
+    if (joker_event==JOKER_EVENT_INDEPENDENT && (joker->persistent_state >> 2) > 0)
     {
         *joker_effect = &shared_joker_effect;
-        (*joker_effect)->chips = joker->persistent_state % 10000000;
+        (*joker_effect)->chips = joker->persistent_state >> 2;
         effect_flags_ret = JOKER_EFFECT_FLAG_CHIPS;  
     }
     if (joker_event==JOKER_EVENT_ON_HAND_PLAYED)
     {
-          
+        static const char* end_suits[] = {"Diamond", "Club", "Heart", "Spade" };
+        *joker_effect = &shared_joker_effect;
+        (*joker_effect)->message = (char*)end_suits[joker->persistent_state % 4];
+        effect_flags_ret = JOKER_EFFECT_FLAG_MESSAGE;   
     }
     if (joker_event==JOKER_EVENT_ON_ROUND_END)
     {
-        static const char* end_suits[] = {"Diamond", "Club", "Heart", "Spade" };
-        joker->persistent_state = random() % 4 * 10000000 + joker->persistent_state % 10000000;
-        *joker_effect = &shared_joker_effect;
-        (*joker_effect)->message = (char*)end_suits[joker->persistent_state/10000000];
-        effect_flags_ret = JOKER_EFFECT_FLAG_MESSAGE;  
+        joker->persistent_state = joker->persistent_state / 4 * 4 + random() % 4;
     }
     return effect_flags_ret;  
 }
@@ -813,7 +825,7 @@ static u32 yorick_joker_effect(
     }
     if (joker_event == JOKER_EVENT_INDEPENDENT && joker->persistent_state>=23) {
          *joker_effect = &shared_joker_effect;
-        (*joker_effect)->xmult  = joker->persistent_state / 23 + 1;
+        (*joker_effect)->xmult = joker->persistent_state / 23 + 1;
         effect_flags_ret = JOKER_EFFECT_FLAG_XMULT;
     }
     return effect_flags_ret;  
@@ -829,16 +841,19 @@ static u32 wee_joker_effect(
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
     if (joker_event == JOKER_EVENT_ON_CARD_SCORED && scored_card->rank==TWO)   {   
         joker->persistent_state += 8;
+        *joker_effect = &shared_joker_effect;
+        (*joker_effect)->message = "UP!";
+        effect_flags_ret = JOKER_EFFECT_FLAG_MESSAGE;
     }
-    if (joker_event == JOKER_EVENT_INDEPENDENT && joker->persistent_state>0) {
-         *joker_effect = &shared_joker_effect;
-        (*joker_effect)->chips  = joker->persistent_state;
+    if (joker_event == JOKER_EVENT_INDEPENDENT && joker->persistent_state > 0) {
+        *joker_effect = &shared_joker_effect;
+        (*joker_effect)->chips = joker->persistent_state;
         effect_flags_ret = JOKER_EFFECT_FLAG_CHIPS;
     }
     return effect_flags_ret;  
 }
 GBAL_UNUSED
-static u32  RoughGem_joker_effect(
+static u32 RoughGem_joker_effect(
     Joker* joker, 
     Card* scored_card, 
     enum JokerEvent joker_event, 
@@ -846,15 +861,14 @@ static u32  RoughGem_joker_effect(
 )
 {
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
-    if (joker_event == JOKER_EVENT_ON_CARD_SCORED && scored_card->suit==DIAMONDS)   {   
+    if (joker_event == JOKER_EVENT_ON_CARD_SCORED && is_suit_equal(scored_card->suit, DIAMONDS)){   
          *joker_effect = &shared_joker_effect;
         (*joker_effect)->money=1;
         effect_flags_ret = JOKER_EFFECT_FLAG_MONEY;
     }
-
     return effect_flags_ret;  
 }
-static u32  Bloodstone_joker_effect(
+static u32 Bloodstone_joker_effect(
     Joker* joker, 
     Card* scored_card, 
     enum JokerEvent joker_event, 
@@ -862,14 +876,16 @@ static u32  Bloodstone_joker_effect(
 )
 {
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
-    if (joker_event == JOKER_EVENT_ON_CARD_SCORED && scored_card->suit==HEARTS)   {   
+    if (joker_event == JOKER_EVENT_ON_CARD_SCORED && is_suit_equal(scored_card->suit, HEARTS) 
+        && check_probablity(500)){   
         *joker_effect = &shared_joker_effect;
         (*joker_effect)->mult =  (get_mult() * 50 + 99) / 100;
-        effect_flags_ret = JOKER_EFFECT_FLAG_MULT;
+        (*joker_effect)->message = "X1`";
+        effect_flags_ret = JOKER_EFFECT_FLAG_XDECIMAL;
     }
     return effect_flags_ret;  
 }
-static u32   OnyxAgate_joker_effect(
+static u32 OnyxAgate_joker_effect(
     Joker* joker, 
     Card* scored_card, 
     enum JokerEvent joker_event, 
@@ -877,14 +893,14 @@ static u32   OnyxAgate_joker_effect(
 )
 {
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
-    if (joker_event == JOKER_EVENT_ON_CARD_SCORED && scored_card->suit==CLUBS)   {   
+    if (joker_event == JOKER_EVENT_ON_CARD_SCORED && is_suit_equal(scored_card->suit, CLUBS)){   
         *joker_effect = &shared_joker_effect;
         (*joker_effect)->mult = 7;
         effect_flags_ret = JOKER_EFFECT_FLAG_MULT;
     }
     return effect_flags_ret;  
 }
-static u32    Arrowhead_joker_effect(
+static u32 Arrowhead_joker_effect(
     Joker* joker, 
     Card* scored_card, 
     enum JokerEvent joker_event, 
@@ -892,7 +908,7 @@ static u32    Arrowhead_joker_effect(
 )
 {
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
-    if (joker_event == JOKER_EVENT_ON_CARD_SCORED && scored_card->suit==SPADES)   {   
+    if (joker_event == JOKER_EVENT_ON_CARD_SCORED && is_suit_equal(scored_card->suit, SPADES)){   
         *joker_effect = &shared_joker_effect;
         (*joker_effect)->chips = 50;
         effect_flags_ret = JOKER_EFFECT_FLAG_CHIPS;
@@ -900,7 +916,7 @@ static u32    Arrowhead_joker_effect(
     return effect_flags_ret;  
 }
 GBAL_UNUSED
-static u32   faceless_joker_effect(
+static u32 faceless_joker_effect(
     Joker* joker, 
     Card* scored_card, 
     enum JokerEvent joker_event, 
@@ -928,7 +944,7 @@ static u32   faceless_joker_effect(
     return effect_flags_ret;  
 }
 GBAL_UNUSED
-static u32    to_moon_joker_effect(
+static u32 to_moon_joker_effect(
     Joker* joker, 
     Card* scored_card, 
     enum JokerEvent joker_event, 
@@ -936,6 +952,217 @@ static u32    to_moon_joker_effect(
 )
 {
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
+    if (joker_event == JOKER_EVENT_ON_JOKER_CREATED){
+        joker->persistent_state = 1;
+    }
+    return effect_flags_ret;  
+}
+GBAL_UNUSED
+static u32 spare_trousers_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+)
+{
+    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
+    if (joker_event==JOKER_EVENT_ON_HAND_PLAYED && get_contained_hands()->TWO_PAIR){
+        joker->persistent_state += 2;
+    }
+    if (joker_event==JOKER_EVENT_INDEPENDENT && joker->persistent_state>0){
+        *joker_effect = &shared_joker_effect;
+        (*joker_effect)->mult = joker->persistent_state;
+        effect_flags_ret = JOKER_EFFECT_FLAG_MULT;
+    }
+    return effect_flags_ret;  
+}
+GBAL_UNUSED
+static u32 burglar_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+)
+{
+    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
+    if (joker_event==JOKER_EVENT_ON_BLIND_SELECTED){
+        int burg_hands = get_num_hands_remaining();
+        set_num_hands_remaining(burg_hands+3);
+        set_num_discards_remaining(0);
+    }
+    return effect_flags_ret;  
+} 
+GBAL_UNUSED
+static u32 swashbuckler_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+)
+{
+    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
+    if (joker_event==JOKER_EVENT_INDEPENDENT){
+        int total_value = 0;
+        List* jokers_list = get_jokers_list();
+        for (int i = 0; i < list_get_len(jokers_list); i++) {
+            JokerObject* j_obj = list_get_at_idx(jokers_list, i);
+            total_value+=j_obj->joker->value; 
+        }
+        total_value-=joker->value;
+        if (total_value>0){
+            *joker_effect = &shared_joker_effect;
+            (*joker_effect)->mult = total_value/2;
+            effect_flags_ret = JOKER_EFFECT_FLAG_MULT;
+        }
+          
+    }
+    return effect_flags_ret;  
+}
+GBAL_UNUSED
+static u32 turtle_bean_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+)
+{
+    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
+    if (joker_event==JOKER_EVENT_ON_JOKER_CREATED){
+        joker->persistent_state = 5;
+    }
+    if (joker_event==JOKER_EVENT_ON_ROUND_END){
+        if (joker->persistent_state > 1){
+            joker->persistent_state -= 1;
+        }
+        else {
+            *joker_effect = &shared_joker_effect;
+            (*joker_effect)->expire = true;
+            effect_flags_ret = JOKER_EFFECT_FLAG_EXPIRE;
+        }    
+    }
+    return effect_flags_ret;  
+}
+GBAL_UNUSED
+static u32 madness_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+)
+{
+    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
+    int owned_joker_idx = get_current_joker_index();
+    if (joker_event == JOKER_EVENT_ON_JOKER_CREATED) {
+        joker->persistent_state = 0;   
+    }
+    if (joker_event == JOKER_EVENT_ON_BLIND_SELECTED && get_current_blind()!=2 &&
+       joker->id != BLUEPRINT_JOKER_ID && joker->id != BRAINSTORM_JOKER_ID) 
+    {      
+        int destroy_idx = random() % (list_get_len(get_jokers_list()) - 1);
+        if (destroy_idx >= owned_joker_idx) {
+            destroy_idx +=1;      
+        }
+        else{
+            offset_current_joker_index(-1); 
+        }
+        JokerObject* destroy_joker_obj = list_get_at_idx(get_jokers_list(), destroy_idx);
+        destroy_designated_joker(destroy_idx); // This will remove the next Joker from our owned list and push it to the expired list, effectively "sacrificing" it. The engine will handle the rest based on the expire flag we set in the effect below.
+        list_push_back(get_expired_jokers_list(), destroy_joker_obj); 
+        joker->persistent_state += 50;     
+    }
+    if (joker_event==JOKER_EVENT_INDEPENDENT && joker->persistent_state > 0)
+    {
+        *joker_effect = &shared_joker_effect;
+        (*joker_effect)->mult = (get_mult() * joker->persistent_state + 99) / 100;
+        truncate_uint_to_suffixed_str((100+joker->persistent_state)*10, 3, xbuff);
+        int len = strlen(xbuff);
+        if (len > 0) {
+            char temp[UINT_MAX_DIGITS + 1];
+            xbuff[len - 1] = '\0'; // 先删掉最后一个
+            snprintf(temp, sizeof(temp), "X%s", xbuff); // 拼接新的到 temp
+            strcpy(xbuff, temp); // 拷回 xbuff
+        }
+        (*joker_effect)->message = xbuff;
+        effect_flags_ret = JOKER_EFFECT_FLAG_XDECIMAL;  
+    }
+    return effect_flags_ret;  
+}
+GBAL_UNUSED
+static u32 space_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+)
+{
+    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
+
+    if (joker_event == JOKER_EVENT_ON_HAND_PLAYED && check_probablity(250)) { // 30% chance to trigger when you play a hand
+        improve_hand_level(get_current_hand_type()); 
+        show_updated_level();  
+        *joker_effect = &shared_joker_effect;
+        (*joker_effect)->message = "UP!";
+        effect_flags_ret = JOKER_EFFECT_FLAG_MESSAGE;  
+    }
+   
+    return effect_flags_ret;  
+}
+GBAL_UNUSED
+static u32 card_sharp_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+)
+{
+    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
+    
+    if (joker_event == JOKER_EVENT_INDEPENDENT) {
+        int flg = 1 << get_current_hand_type(); 
+        if (joker->persistent_state & flg){
+            *joker_effect = &shared_joker_effect;
+            (*joker_effect)->xmult = 3;
+            effect_flags_ret = JOKER_EFFECT_FLAG_XMULT; 
+        }
+        else{
+            joker->persistent_state |= flg;
+        }
+    }
+    if (joker_event == JOKER_EVENT_ON_ROUND_END) {
+        joker->persistent_state = 0;
+    }
+   
+    return effect_flags_ret;  
+}
+GBAL_UNUSED
+static u32 oops_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+)
+{
+    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;   
+    return effect_flags_ret;  
+}
+GBAL_UNUSED
+static u32 runner_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+)
+{
+    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE; 
+    if (joker_event == JOKER_EVENT_ON_HAND_PLAYED && get_contained_hands()->STRAIGHT) {
+        joker -> persistent_state += 15; 
+    }  
+    if (joker_event == JOKER_EVENT_INDEPENDENT && joker->persistent_state > 0) {
+        *joker_effect = &shared_joker_effect;
+        (*joker_effect)->chips = joker->persistent_state;
+        effect_flags_ret = JOKER_EFFECT_FLAG_CHIPS;
+    }       
+    
     return effect_flags_ret;  
 }
 // --- 2. YOUR MODDED REGISTRY ---
@@ -958,10 +1185,10 @@ const JokerInfo modded_joker_registry[] = {
     { RARE_JOKER,            16,     c_joker_effect                     }, // ID 110 (Cyclone Joker)
     { RARE_JOKER,            16,     j_joker_effect                     }, // ID 111 (Joker Joker)
     { COMMON_JOKER,          5,      test_joker_effect                  }, // ID 112 (test Joker, used for testing various flags and conditions, feel free to change the logic as you see fit!)
-    { RARE_JOKER,            8,      baron_joker_effect                 }, // ID 113 (Baron)
+    { UNCOMMON_JOKER,        6,      turtle_bean_joker_effect           }, // ID 113
     { COMMON_JOKER,          4,      egg_joker_effect                   }, // ID 114 (Egg Joker)
     { COMMON_JOKER,          4,      delayed_gratification_joker_effect }, // ID 115 (Delayed Gratification)
-    { COMMON_JOKER,          5,      credit_card_joker_effect           }, // ID 116 (Credit Card)
+    { COMMON_JOKER,          1,      credit_card_joker_effect           }, // ID 116 (Credit Card)
     { RARE_JOKER,            10,     invisible_joker_effect             }, // ID 117 (Invisible Joker)
     { UNCOMMON_JOKER,        6,      seeing_double_joker_effect         }, // ID 118 (Seeing Double)
     { COMMON_JOKER,          6,      ride_bus_joker_effect              }, // ID 119 (Ride the Bus)
@@ -977,14 +1204,22 @@ const JokerInfo modded_joker_registry[] = {
     { COMMON_JOKER,          8,      ceremonial_dagger_joker_effect     }, // ID 129 (Ceremonial Dagger)
     { UNCOMMON_JOKER,        6,      castle_joker_effect                }, // ID 130 (Castle Joker)
     { LEGENDARY_JOKER,       20,     triboulet_joker_effect             }, // ID 131 (Triboulet Joker)
-    {RARE_JOKER,8,wee_joker_effect},
-    {LEGENDARY_JOKER,       20, yorick_joker_effect}, 
-    {UNCOMMON_JOKER,        7,  Bloodstone_joker_effect},
-    {UNCOMMON_JOKER,        7,  RoughGem_joker_effect},
-    {UNCOMMON_JOKER,        7,  OnyxAgate_joker_effect},
-    {UNCOMMON_JOKER,        7,  Arrowhead_joker_effect},
-
-
+    { RARE_JOKER,            8,      wee_joker_effect                   },
+    { LEGENDARY_JOKER,       20,     yorick_joker_effect                }, 
+    { UNCOMMON_JOKER,        7,      Bloodstone_joker_effect            },
+    { UNCOMMON_JOKER,        7,      RoughGem_joker_effect              },
+    { UNCOMMON_JOKER,        7,      OnyxAgate_joker_effect             },
+    { UNCOMMON_JOKER,        7,      Arrowhead_joker_effect             },
+    { UNCOMMON_JOKER,        5,      to_moon_joker_effect               },
+    { UNCOMMON_JOKER,        6,      spare_trousers_joker_effect        },
+    { UNCOMMON_JOKER,        6,      burglar_joker_effect               },
+    { COMMON_JOKER,          4,      swashbuckler_joker_effect          },
+    { RARE_JOKER,            8,      baron_joker_effect                 }, // ID 142
+    { UNCOMMON_JOKER,        7,      madness_joker_effect               }, 
+    { UNCOMMON_JOKER,        5,      space_joker_effect                 },
+    { UNCOMMON_JOKER,        6,      card_sharp_joker_effect            }, // ID 145  
+    { UNCOMMON_JOKER,        4,      oops_joker_effect                  }, // ID 146 (Oops Joker)
+    { COMMON_JOKER,          5,      runner_joker_effect                }, // ID 147 (Runner Joker)
 };
 
 

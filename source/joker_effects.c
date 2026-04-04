@@ -11,6 +11,7 @@
 
 extern int total_hands_played[16];
 extern enum HandType* get_hand_type(void); // Bring in the hand type fetcher, Supernova thingy
+extern bool check_probablity(int probability); // Bring in the probability checker, Supernova thingy
 
 #define SCORE_ON_EVENT_ONLY_WITH_CARD(scored_card, restricted_event, checked_event) \
     if (checked_event != restricted_event || scored_card == NULL)                   \
@@ -1095,7 +1096,7 @@ static u32 reserved_parking_joker_effect(
 
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
 
-    if ((random() % 2 == 0) && card_is_face(scored_card))
+    if (check_probablity(500) && card_is_face(scored_card))
     {
         *joker_effect = &shared_joker_effect;
 
@@ -1117,7 +1118,7 @@ static u32 business_card_joker_effect(
 
     u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
 
-    if ((random() % 2 == 0) && card_is_face(scored_card))
+    if (check_probablity(500) && card_is_face(scored_card))
     {
         *joker_effect = &shared_joker_effect;
 
@@ -1858,7 +1859,7 @@ static u32 gros_michel_joker_effect(
 
     if (joker_event == JOKER_EVENT_ON_ROUND_END)
     {
-        if (random() % 6 == 0)
+        if (check_probablity(167)) // 1 in 6 chance
         {
             *joker_effect = &shared_joker_effect;
             (*joker_effect)->message = "Ext!";
@@ -1881,7 +1882,7 @@ static u32 cavendish_joker_effect(
         flags |= JOKER_EFFECT_FLAG_XMULT;
     }
     if (joker_event == JOKER_EVENT_ON_ROUND_END) {
-        if (random() % 1000 == 0) { // 1 in 1000 chance to die
+        if (check_probablity(1)) { // 1 in 1000 chance to die
             *joker_effect = &shared_joker_effect;
             (*joker_effect)->message = "Extinct!";
             (*joker_effect)->expire = true;

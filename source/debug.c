@@ -34,7 +34,8 @@
 
 #include "modded_joker_info.h"
 extern size_t get_modded_registry_size(void);
-
+extern int four_fingers_joker_count;
+extern int shortcut_joker_count; // Brought in from game.c so we can track it here for testing
 /* ========================================================================
  * Internal state
  * ======================================================================== */
@@ -239,7 +240,12 @@ static void debug_picker_add_joker(int joker_id)
         joker_destroy(&joker);
         return;
     }
-
+    if (joker->id == FOUR_FINGERS_JOKER_ID){
+        four_fingers_joker_count++;
+    }
+    if (joker->id == SHORTCUT_JOKER_ID){
+        shortcut_joker_count++;
+    }
     /* Position off-screen; held_jokers_update_loop will animate it in */
     joker_object->sprite_object->x  = int2fx(108);
     joker_object->sprite_object->y  = int2fx(10);
