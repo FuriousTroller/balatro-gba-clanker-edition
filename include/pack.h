@@ -3,6 +3,9 @@
 
 #include <tonc.h>
 #include "sprite.h"
+#include "list.h"
+
+extern List _shop_packs_list;
 
 // 1. The universal pack types
 typedef enum {
@@ -40,6 +43,7 @@ void spawn_pack_cards(const PackInfo* info);
 void despawn_pack_cards(void);
 
 void pack_load_gfx(void);
-void pack_spawn_in_shop(int x, int y);
+void pack_spawn_in_shop(int x, int y, u8 pack_id, int sprite_index);
+void pack_despawn_shop_packs(void);
 
 #endif // PACK_H

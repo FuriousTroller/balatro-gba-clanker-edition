@@ -42,9 +42,9 @@ void pack_init(void) {
 
 // --- VRAM LOADING ---
 void pack_load_gfx(void) {
-    // Load Palettes into Sprite Banks 4 and 5 (16 colors = 16 halfwords)
-    memcpy16(&pal_obj_mem[PAL_ROW_LEN * 4], buffoon_packs_gfx0Pal, 16);
-    memcpy16(&pal_obj_mem[PAL_ROW_LEN * 5], buffoon_packs_gfx1Pal, 16);
+    // Load Palettes into Sprite Banks 1 and 2 (16 colors = 16 halfwords)
+    memcpy16(&pal_obj_mem[PAL_ROW_LEN * 1], buffoon_packs_gfx0Pal, 16);
+    memcpy16(&pal_obj_mem[PAL_ROW_LEN * 2], buffoon_packs_gfx1Pal, 16);
 
     // Load Tiles into Sprite VRAM Block 4 (Tiles 256 and 272)
     // Each sprite tile sheet is 256 u32s.
@@ -53,31 +53,28 @@ void pack_load_gfx(void) {
 }
 
 // --- SHOP SPAWNING LOGIC ---
-void pack_spawn_in_shop(int x, int y) {
-    // Roll a 50/50 chance for Normal (ID 0) or Jumbo (ID 1)
-    u8 pack_id = (qran_range(0, 100) > 50) ? 0 : 1;
+void pack_spawn_in_shop(int x, int y, u8 pack_id, int sprite_index) {
     const PackInfo* info = get_pack_registry_entry(pack_id);
+    if (info == NULL) return;
 
     PackObject* shop_pack = malloc(sizeof(PackObject));
     shop_pack->info = info;
     shop_pack->sprite_object = sprite_object_new();
     
     u32 tid = (pack_id == 0) ? 256 : 272;
-    u32 pb = (pack_id == 0) ? 4 : 5;
+    u32 pb = (pack_id == 0) ? 1 : 2;
     
     sprite_object_set_sprite(
         shop_pack->sprite_object,
-        sprite_new(ATTR0_SQUARE | ATTR0_4BPP | ATTR0_AFF, ATTR1_SIZE_32, tid, pb, 2)
+        sprite_new(ATTR0_SQUARE | ATTR0_4BPP | ATTR0_AFF, ATTR1_SIZE_32, tid, pb, sprite_index)
     );
     
     sprite_object_reset_transform(shop_pack->sprite_object);
     
     shop_pack->sprite_object->x = int2fx(x); 
     shop_pack->sprite_object->tx = int2fx(x); 
-    shop_pack->sprite_object->y = int2fx(y); 
-    shop_pack->sprite_object->ty = int2fx(y); 
-
-    sprite_position(shop_pack->sprite_object->sprite, x, y);
+    shop_pack->sprite_object->y = int2fx(160); // Start offscreen bottom
+    shop_pack->sprite_object->ty = int2fx(y);   // Target shelf height
 
     list_push_back(&_shop_packs_list, shop_pack);
 }
@@ -104,11 +101,19 @@ void spawn_pack_cards(const PackInfo* info) {
     if (info == NULL) return;
 
     int count = info->cards_to_spawn;
-    int center_x = 156; 
-    
-    int spacing = (count >= 5) ? 32 : 40; 
-    int total_width = (count - 1) * spacing;
-    int start_x = center_x - (total_width / 2);
+
+    // Play area: x=80 (after HUD) to x=208 (before buttons) = 128px wide
+    // Center of play area = 80 + 128/2 = 144
+    // Card sprites are 32px wide, so card visual center = position + 16
+    int area_center = 144;
+    int card_width = 32;
+
+    // Spacing between card centers
+    int spacing = 40;
+    if (count == 2) spacing = 50;
+    else if (count == 3) spacing = 44;
+    else if (count == 4) spacing = 32;
+    else if (count >= 5) spacing = 24;
 
     for (int i = 0; i < count; i++) {
         // TEMPORARY: Spawns Jokers to test the UI layout
@@ -117,7 +122,25 @@ void spawn_pack_cards(const PackInfo* info) {
 
         JokerObject* card = joker_object_new(joker_new(joker_id));
 
-        card->sprite_object->x = int2fx(start_x + (i * spacing));
+        // Symmetrical centering:
+        // For odd count:  middle card (i = count/2) has center at area_center
+        // For even count: cards straddle the center evenly
+        int card_center_x;
+        if (count % 2 == 1) {
+            // Odd: middle card index = count/2
+            int mid = count / 2;
+            card_center_x = area_center + (i - mid) * spacing;
+        } else {
+            // Even: no card at center, straddle it
+            // Card 0 gets offset -(count/2 - 1) - 0.5, etc.
+            // i.e. offset = (i - count/2) * spacing + spacing/2
+            card_center_x = area_center + (i - count / 2) * spacing + spacing / 2;
+        }
+
+        // Convert center to top-left position
+        int pos_x = card_center_x - card_width / 2;
+
+        card->sprite_object->x = int2fx(pos_x);
         card->sprite_object->y = int2fx(180); // Hide below the floor
         
         card->sprite_object->tx = card->sprite_object->x;
@@ -136,4 +159,18 @@ void despawn_pack_cards(void) {
         joker_object_destroy(&card);
     }
     list_clear(&_pack_cards_list);
+}
+
+void pack_despawn_shop_packs(void) {
+    ListItr itr = list_itr_create(&_shop_packs_list);
+    PackObject* pack;
+    while ((pack = list_itr_next(&itr))) {
+        if (pack != NULL) {
+            if (pack->sprite_object != NULL) {
+                sprite_object_destroy(&pack->sprite_object);
+            }
+            free(pack);
+        }
+    }
+    list_clear(&_shop_packs_list);
 }

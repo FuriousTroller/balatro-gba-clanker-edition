@@ -67,6 +67,11 @@ for char_y in range(NUM_VERT_CHARS):
                 word0 = word0 | (bit << i)
             else:
                 word1 = word1 | (bit << (i - WORD_SIZE))
+        # Override the character '>' (ASCII 62, which is index 30 in the glyphs list)
+        # to look like a beautiful right arrow pointer, instead of duplicating '7'.
+        if len(glyphs) == 30:
+            word0 = 0x060C1800
+            word1 = 0x00180C06
         glyphs.append((word0, word1))
 
 NUM_WORDS_IN_ROW = 8

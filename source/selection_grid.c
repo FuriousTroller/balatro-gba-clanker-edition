@@ -62,46 +62,51 @@ void selection_grid_move_selection_vert(SelectionGrid* selection_grid, int direc
 
     Selection selection = selection_grid->selection;
     Selection new_selection = selection;
-    new_selection.y += direction_tribool;
 
-    if (new_selection.y >= 0 && new_selection.y < selection_grid->num_rows)
+    while (true)
     {
-        int new_row_size = selection_grid->rows[new_selection.y].get_size();
-        if (new_row_size <= 0)
-            return;
-
-        int old_row_size = selection_grid->rows[selection.y].get_size();
-
-        // Branchless set to 1 if 0 to avoid division by 0
-        old_row_size += (old_row_size == 0);
-
-        // Maintain relative horizontal position
-        // The operations are equivalent to fixed point if all the numbers were converted
-        new_selection.x = fx2int(selection.x * ((int2fx(new_row_size) / old_row_size)));
-
-        bool proceed_selection = true;
-
-        if (selection.y >= 0 && selection.y < selection_grid->num_rows)
+        new_selection.y += direction_tribool;
+        if (new_selection.y < 0 || new_selection.y >= selection_grid->num_rows)
         {
-            proceed_selection =
-                selection_grid->rows[selection.y]
-                    .on_selection_changed(selection_grid, selection.y, &selection, &new_selection);
+            return; // Out of bounds
         }
-
-        if (proceed_selection)
+        if (selection_grid->rows[new_selection.y].get_size() > 0)
         {
-            proceed_selection = selection_grid->rows[new_selection.y].on_selection_changed(
-                selection_grid,
-                new_selection.y,
-                &selection,
-                &new_selection
-            );
+            break; // Found a non-empty row!
         }
+    }
 
-        if (proceed_selection)
-        {
-            selection_grid->selection = new_selection;
-        }
+    int new_row_size = selection_grid->rows[new_selection.y].get_size();
+    int old_row_size = selection_grid->rows[selection.y].get_size();
+
+    // Branchless set to 1 if 0 to avoid division by 0
+    old_row_size += (old_row_size == 0);
+
+    // Maintain relative horizontal position
+    new_selection.x = fx2int(selection.x * ((int2fx(new_row_size) / old_row_size)));
+
+    bool proceed_selection = true;
+
+    if (selection.y >= 0 && selection.y < selection_grid->num_rows)
+    {
+        proceed_selection =
+            selection_grid->rows[selection.y]
+                .on_selection_changed(selection_grid, selection.y, &selection, &new_selection);
+    }
+
+    if (proceed_selection)
+    {
+        proceed_selection = selection_grid->rows[new_selection.y].on_selection_changed(
+            selection_grid,
+            new_selection.y,
+            &selection,
+            &new_selection
+        );
+    }
+
+    if (proceed_selection)
+    {
+        selection_grid->selection = new_selection;
     }
 }
 

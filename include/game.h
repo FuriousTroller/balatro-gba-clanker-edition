@@ -182,5 +182,7 @@ bool is_shortcut_joker_active(void);
 int get_straight_and_flush_size(void);
 
 int game_shop_get_rand_available_joker_id(void);
+void add_joker(JokerObject* joker_object);
+extern const BG_POINT HELD_JOKERS_POS;
 
 #endif // GAME_H
