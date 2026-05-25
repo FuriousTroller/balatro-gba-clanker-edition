@@ -2,7 +2,9 @@
 #include "game.h"
 #include "joker.h"
 #include "list.h"
+#include "util.h"
 #include <stddef.h>
+#include <stdlib.h>
 
 // --- THE MASTER PACK REGISTRY ---
 static const PackInfo pack_registry[] = {
@@ -29,8 +31,9 @@ extern const u16 buffoon_packs_gfx0Pal[16];
 extern const u32 buffoon_packs_gfx1Tiles[256];
 extern const u16 buffoon_packs_gfx1Pal[16];
 
-// The list holding the physical packs sitting on the shelf
+// The lists holding the physical packs sitting on the shelf and spawned cards inside the opened pack
 List _shop_packs_list; 
+List _pack_cards_list;
 
 void pack_init(void) {
     _pack_cards_list = list_create();
@@ -39,13 +42,14 @@ void pack_init(void) {
 
 // --- VRAM LOADING ---
 void pack_load_gfx(void) {
-    // Load Palettes into Sprite Banks 4 and 5
-    dma3_cp(&pal_obj_mem[4 * 16], buffoon_packs_gfx0Pal, sizeof(buffoon_packs_gfx0Pal));
-    dma3_cp(&pal_obj_mem[5 * 16], buffoon_packs_gfx1Pal, sizeof(buffoon_packs_gfx1Pal));
+    // Load Palettes into Sprite Banks 4 and 5 (16 colors = 16 halfwords)
+    memcpy16(&pal_obj_mem[PAL_ROW_LEN * 4], buffoon_packs_gfx0Pal, 16);
+    memcpy16(&pal_obj_mem[PAL_ROW_LEN * 5], buffoon_packs_gfx1Pal, 16);
 
     // Load Tiles into Sprite VRAM Block 4 (Tiles 256 and 272)
-    dma3_cp(&tile_mem[4][256], buffoon_packs_gfx0Tiles, sizeof(buffoon_packs_gfx0Tiles));
-    dma3_cp(&tile_mem[4][272], buffoon_packs_gfx1Tiles, sizeof(buffoon_packs_gfx1Tiles));
+    // Each sprite tile sheet is 256 u32s.
+    memcpy32(&tile_mem[4][256], buffoon_packs_gfx0Tiles, 256);
+    memcpy32(&tile_mem[4][272], buffoon_packs_gfx1Tiles, 256);
 }
 
 // --- SHOP SPAWNING LOGIC ---
@@ -58,21 +62,24 @@ void pack_spawn_in_shop(int x, int y) {
     shop_pack->info = info;
     shop_pack->sprite_object = sprite_object_new();
     
-    shop_pack->sprite_object->x = int2fx(x); 
-    shop_pack->sprite_object->y = int2fx(y); 
-
-    shop_pack->sprite_object->sprite->attr0 = ATTR0_SQUARE | ATTR0_Y(y);
-    shop_pack->sprite_object->sprite->attr1 = ATTR1_SIZE_32 | ATTR1_X(x);
+    u32 tid = (pack_id == 0) ? 256 : 272;
+    u32 pb = (pack_id == 0) ? 4 : 5;
     
-    // Assign the correct Palette and Tile based on the ID!
-    if (pack_id == 0) {
-        shop_pack->sprite_object->sprite->attr2 = ATTR2_PALBANK(4) | 256; 
-    } else {
-        shop_pack->sprite_object->sprite->attr2 = ATTR2_PALBANK(5) | 272; 
-    }
+    sprite_object_set_sprite(
+        shop_pack->sprite_object,
+        sprite_new(ATTR0_SQUARE | ATTR0_4BPP | ATTR0_AFF, ATTR1_SIZE_32, tid, pb, 2)
+    );
+    
+    sprite_object_reset_transform(shop_pack->sprite_object);
+    
+    shop_pack->sprite_object->x = int2fx(x); 
+    shop_pack->sprite_object->tx = int2fx(x); 
+    shop_pack->sprite_object->y = int2fx(y); 
+    shop_pack->sprite_object->ty = int2fx(y); 
+
+    sprite_position(shop_pack->sprite_object->sprite, x, y);
 
     list_push_back(&_shop_packs_list, shop_pack);
-    sprite_draw_single(shop_pack->sprite_object->sprite); 
 }
 
 const PackInfo* get_pack_registry_entry(u8 id) {
@@ -87,13 +94,6 @@ const PackInfo* get_pack_registry_entry(u8 id) {
 
 int get_pack_registry_size(void) {
     return sizeof(pack_registry) / sizeof(pack_registry[0]);
-}
-
-// --- TEMPORARY PACK CARD LIST ---
-List _pack_cards_list;
-
-void pack_init(void) {
-    _pack_cards_list = list_create();
 }
 
 // --- CARD SPAWNING MATH ---

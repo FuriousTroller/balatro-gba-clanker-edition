@@ -181,4 +181,6 @@ void set_game_speed(int new_game_speed);
 bool is_shortcut_joker_active(void);
 int get_straight_and_flush_size(void);
 
+int game_shop_get_rand_available_joker_id(void);
+
 #endif // GAME_H
