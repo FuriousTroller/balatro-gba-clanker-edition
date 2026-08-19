@@ -49,6 +49,8 @@ const char* const debug_modded_joker_names[] = {
     [45] = "Sharp",
     [46] = "Oops",
     [47] = "Runner",
+    [48] = "Hiker",
+    [49] = "Obelisk",
 
     /* [4] = "YourNext",  // ID xxx – add your next modded joker here */
 };

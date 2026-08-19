@@ -2044,7 +2044,7 @@ static void display_round(int value)
 
 static void display_hands(int value)
 {
-    tte_erase_rect_wrapper(HANDS_TEXT_RECT);
+    // tte_erase_rect_wrapper(HANDS_TEXT_RECT);
     tte_printf("#{P:%d,%d; cx:0xD000}%d", HANDS_TEXT_RECT.left, HANDS_TEXT_RECT.top, hands); // Hand
 }
 
@@ -4673,6 +4673,7 @@ static void game_round_end_display_rewards()
     {
         game_round_end_print_interest_reward(interest_y_offset);
     }
+    // TODO: Add bonus like gold joker or delayed gratification
 }
 
 static inline void game_round_end_cashout(void)

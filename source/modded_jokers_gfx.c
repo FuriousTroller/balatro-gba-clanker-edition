@@ -28,6 +28,7 @@
 #include "custom_joker_sheet_21.h"
 #include "custom_joker_sheet_22.h"
 #include "custom_joker_sheet_23.h"
+#include "custom_joker_sheet_24.h"
 
 // Add this when you make IDs 1xx & 1xx!
 
@@ -64,6 +65,7 @@ static const unsigned int* modded_joker_tiles[] = {
     custom_joker_sheet_21Tiles,    
     custom_joker_sheet_22Tiles, 
     custom_joker_sheet_23Tiles,
+    custom_joker_sheet_24Tiles, // Add this when you make IDs 1xx & 1xx!
 };
 
 static const unsigned short* modded_joker_pals[] = { 
@@ -91,6 +93,7 @@ static const unsigned short* modded_joker_pals[] = {
     custom_joker_sheet_21Pal,
     custom_joker_sheet_22Pal,
     custom_joker_sheet_23Pal,
+    custom_joker_sheet_24Pal, // Add this when you make IDs 1xx & 1xx!
 };
 
 #define NUM_MODDED_SHEETS (sizeof(modded_joker_tiles) / sizeof(modded_joker_tiles[0]))

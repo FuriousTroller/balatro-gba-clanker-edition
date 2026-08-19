@@ -30,6 +30,7 @@
 #include "custom_joker_sheet_21.h"
 #include "custom_joker_sheet_22.h"
 #include "custom_joker_sheet_23.h"
+#include "custom_joker_sheet_24.h"
 // #include "custom_joker_sheet_x.h" // Add this when you make IDs 1xx & 1xx!
 
 // Creates a local shared memory struct specifically for your modded cards to use
@@ -48,6 +49,7 @@ extern bool is_c_j_fusion_active(void);
 extern bool check_probablity(int probability);
 extern void improve_hand_level(int hand_to_improve);
 extern int get_current_hand_type();
+extern int total_hands_played[16];
 #define MODDED_JOKER_START_ID 100
 #define NUM_JOKERS_PER_SPRITESHEET 2
 #define CLAMP_CUSTOM(x, low, high) ((x) > (high) ? (high) : ((x) < (low) ? 0 : (x)))
@@ -72,6 +74,18 @@ bool is_suit_equal(int suit1, int suit2){
         return suit1 == suit2;
     }
 }
+int get_most_played_hand_type(void){
+    int max_hands = 0;
+    int most_played_hand_type = 0;
+    for (int i = 0; i < 16; i++){
+        if (total_hands_played[i] >= max_hands){
+            max_hands = total_hands_played[i];
+            most_played_hand_type = i;
+        }
+    }
+    return most_played_hand_type;
+}
+
 static u32 mobius_joker_effect(
     Joker* joker, 
     Card* scored_card, 
@@ -1165,6 +1179,53 @@ static u32 runner_joker_effect(
     
     return effect_flags_ret;  
 }
+GBAL_UNUSED
+static u32 hiker_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+)
+{
+    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE; 
+    if (joker_event == JOKER_EVENT_ON_CARD_SCORED_END) {
+        scored_card->value += 5; 
+        *joker_effect = &shared_joker_effect;
+        (*joker_effect)->message = "+5!";
+        effect_flags_ret = JOKER_EFFECT_FLAG_MESSAGE;
+    }  
+    return effect_flags_ret;  
+}
+GBAL_UNUSED
+static u32 obelisk_joker_effect(
+    Joker* joker, 
+    Card* scored_card, 
+    enum JokerEvent joker_event, 
+    JokerEffect** joker_effect
+)
+{
+    u32 effect_flags_ret = JOKER_EFFECT_FLAG_NONE;
+    if (joker_event == JOKER_EVENT_ON_HAND_PLAYED) {
+        if (get_current_hand_type() != get_most_played_hand_type()) {
+            joker->persistent_state += 10; 
+        }
+    }   
+    if (joker_event == JOKER_EVENT_INDEPENDENT && joker->persistent_state > 0) {
+        *joker_effect = &shared_joker_effect;
+        (*joker_effect)->mult = (get_mult() * joker->persistent_state + 99) / 100;
+        truncate_uint_to_suffixed_str((100+joker->persistent_state)*10, 3, xbuff);
+        int len = strlen(xbuff);
+        if (len > 0) {
+            char temp[UINT_MAX_DIGITS + 1];
+            xbuff[len - 1] = '\0'; // 先删掉最后一个
+            snprintf(temp, sizeof(temp), "X%s", xbuff); // 拼接新的到 temp
+            strcpy(xbuff, temp); // 拷回 xbuff
+        }
+        (*joker_effect)->message = xbuff;
+        effect_flags_ret = JOKER_EFFECT_FLAG_XDECIMAL;  
+    }  
+    return effect_flags_ret;  
+}
 // --- 2. YOUR MODDED REGISTRY ---
 
 // The engine knows to start reading this array at ID 100.
@@ -1220,6 +1281,8 @@ const JokerInfo modded_joker_registry[] = {
     { UNCOMMON_JOKER,        6,      card_sharp_joker_effect            }, // ID 145  
     { UNCOMMON_JOKER,        4,      oops_joker_effect                  }, // ID 146 (Oops Joker)
     { COMMON_JOKER,          5,      runner_joker_effect                }, // ID 147 (Runner Joker)
+    { UNCOMMON_JOKER,        6,      hiker_joker_effect                 }, // ID 148 (Hiker Joker)
+    { RARE_JOKER,            8,      obelisk_joker_effect              }, // ID 149 (Obelisk Joker)
 };
 
 

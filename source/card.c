@@ -33,6 +33,8 @@ Card* card_new(u8 suit, u8 rank)
 
     card->suit = suit;
     card->rank = rank;
+    card->value = 0;
+    // 新一轮目前未清空
 
     return card;
 }
@@ -47,15 +49,15 @@ u8 card_get_value(Card* card)
 {
     if (card->rank == JACK || card->rank == QUEEN || card->rank == KING)
     {
-        return 10; // Face cards are worth 10
+        return 10 + card->value; // Face cards are worth 10
     }
     else if (card->rank == ACE)
     {
-        return 11; // Ace is worth 11
+        return 11 + card->value; // Ace is worth 11
     }
     else
     {
-        return card->rank + RANK_OFFSET; // 2-10 are worth their rank + RANK_OFFSET
+        return card->rank + RANK_OFFSET + card->value; // 2-10 are worth their rank + RANK_OFFSET
     }
 
     return 0; // Should never reach here, but just in case

@@ -45,6 +45,7 @@ typedef struct Card
 {
     u8 suit;
     u8 rank;
+    u8 value; // Cached value of the card for easy access during scoring
 } Card;
 
 typedef struct CardObject
